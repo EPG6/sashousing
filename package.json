@@ -1,0 +1,14 @@
+{
+  "name": "sashousing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace frontend && npm run build --workspace backend",
+    "test": "npm run typecheck --workspace frontend && npm run typecheck --workspace backend"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}

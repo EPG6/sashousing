@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --background: #f3f4f6;
+    --foreground: #111827;
+}
+
+body {
+    background: var(--background);
+    color: var(--foreground);
+}
+
+button,
+a {
+    transition-duration: 150ms;
+}
