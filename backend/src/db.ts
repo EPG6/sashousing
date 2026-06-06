@@ -1,8 +1,7 @@
 import mongoose from 'mongoose';
-import { GridFSBucket } from 'mongodb';
 
 let connectionPromise: Promise<typeof mongoose> | null = null;
-let housingReviewPictures: GridFSBucket | null = null;
+let housingReviewPictures: mongoose.mongo.GridFSBucket | null = null;
 
 export async function connectDb() {
     if (mongoose.connection.readyState === 1 && housingReviewPictures) {
@@ -25,7 +24,7 @@ export async function connectDb() {
         throw new Error('MongoDB connection is not ready');
     }
 
-    housingReviewPictures = new GridFSBucket(db, {
+    housingReviewPictures = new mongoose.mongo.GridFSBucket(db, {
         bucketName: 'housingreviewpictures',
     });
 

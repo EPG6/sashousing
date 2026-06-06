@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { ObjectId } from 'mongodb';
+import mongoose from 'mongoose';
 import multer from 'multer';
 import {
     isAuthenticated,
@@ -16,6 +16,9 @@ const router = express.Router();
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
+
+const getParam = (param: string | string[]): string =>
+    Array.isArray(param) ? param[0] : param;
 
 /**
  * @route   GET /api/campus/housing
@@ -42,7 +45,7 @@ router.get(
     async (req: Request, res: Response) => {
         try {
             // Get building id
-            const buildingId = parseInt(req.params.building, 10);
+            const buildingId = parseInt(getParam(req.params.building), 10);
 
             // Check if conversion is valid
             if (isNaN(buildingId)) {
@@ -78,7 +81,7 @@ router.get(
     async (req: Request, res: Response) => {
         try {
             // Get building id
-            const buildingId = parseInt(req.params.building, 10);
+            const buildingId = parseInt(getParam(req.params.building), 10);
 
             // Check if conversion is valid
             if (isNaN(buildingId)) {
@@ -114,7 +117,7 @@ router.get(
     async (req: Request, res: Response) => {
         try {
             // Get room id and convert it to a number
-            const roomId = parseInt(req.params.room, 10);
+            const roomId = parseInt(getParam(req.params.room), 10);
 
             // Check if conversion is valid
             if (isNaN(roomId)) {
@@ -207,7 +210,8 @@ router.get(
     async (req: Request, res: Response) => {
         try {
             // Get room id and convert it to a number
-            const { buildingId, roomNumber } = req.params;
+            const buildingId = getParam(req.params.buildingId);
+            const roomNumber = getParam(req.params.roomNumber);
             const buildingIdNumber = parseInt(buildingId, 10);
 
             // Find the room by building and room number
@@ -303,7 +307,7 @@ router.post(
     upload.array('pictures'),
     async (req: Request, res: Response) => {
         try {
-            const pictureIds: ObjectId[] = [];
+            const pictureIds: mongoose.mongo.ObjectId[] = [];
 
             // Upload each file to GridFS
             if (Array.isArray(req.files)) {
@@ -347,7 +351,8 @@ router.post(
             const maxId = (result[0]?.maxValue || 0) + 1;
 
             // Find room id by building and room number
-            const { buildingId, roomNumber } = req.params;
+            const buildingId = getParam(req.params.buildingId);
+            const roomNumber = getParam(req.params.roomNumber);
             const buildingIdNumber = parseInt(buildingId, 10);
 
             if (isNaN(buildingIdNumber)) {
@@ -407,7 +412,7 @@ router.patch(
                 return;
             }
 
-            const reviewId = Number(req.params.reviewId);
+            const reviewId = Number(getParam(req.params.reviewId));
             const oldReview = await HousingReviews.findOne({ id: reviewId });
 
             if (!oldReview) {
@@ -429,13 +434,15 @@ router.patch(
                 pictures: oldReview.pictures,
             };
 
-            const pictureIds: ObjectId[] = [];
+            const pictureIds: mongoose.mongo.ObjectId[] = [];
 
             if (Array.isArray(req.files) && req.files.length > 0) {
                 // if new pictures provided, delete old pictures from database
                 if (oldReview.pictures && oldReview.pictures.length > 0) {
                     for (const pictureId of oldReview.pictures) {
-                        const oldPictureId = new ObjectId(pictureId);
+                        const oldPictureId = new mongoose.mongo.ObjectId(
+                            pictureId
+                        );
                         const housingReviewPictures =
                             getHousingReviewPictures();
                         console.log(
@@ -505,7 +512,7 @@ router.delete(
     async (req: Request, res: Response) => {
         try {
             const review = await HousingReviews.findOneAndDelete({
-                id: Number(req.params.reviewId),
+                id: Number(getParam(req.params.reviewId)),
             });
 
             if (!review) {
@@ -530,7 +537,7 @@ router.get(
     isAuthenticated,
     async (req: Request, res: Response) => {
         try {
-            const fileId = new ObjectId(req.params.id);
+            const fileId = new mongoose.mongo.ObjectId(getParam(req.params.id));
             const housingReviewPictures = getHousingReviewPictures();
 
             // Check if file exists
@@ -573,7 +580,7 @@ router.get(
     isAuthenticated,
     async (req: Request, res: Response) => {
         try {
-            const buildingId = parseInt(req.params.building, 10);
+            const buildingId = parseInt(getParam(req.params.building), 10);
             if (isNaN(buildingId)) {
                 res.status(400).json({ message: 'Invalid building ID format' });
                 return;
