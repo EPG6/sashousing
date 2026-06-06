@@ -26,7 +26,11 @@ const getServiceAccount = () => {
     return null;
 };
 
-if (!admin.apps.length) {
+const initializeFirebaseAdmin = () => {
+    if (admin.apps.length) {
+        return admin.app();
+    }
+
     const serviceAccount = getServiceAccount();
 
     if (!serviceAccount) {
@@ -38,6 +42,8 @@ if (!admin.apps.length) {
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
     });
-}
 
-export const firebaseAuth = admin.auth();
+    return admin.app();
+};
+
+export const getFirebaseAuth = () => initializeFirebaseAdmin().auth();

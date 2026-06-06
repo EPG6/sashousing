@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { firebaseAuth } from '../firebaseAdmin';
+import { getFirebaseAuth } from '../firebaseAdmin';
 import { Users } from '../models/User';
 
 const router = express.Router();
@@ -22,7 +22,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     try {
-        const decodedToken = await firebaseAuth.verifyIdToken(idToken);
+        const decodedToken = await getFirebaseAuth().verifyIdToken(idToken);
         const email = decodedToken.email?.trim().toLowerCase();
 
         if (!email) {
