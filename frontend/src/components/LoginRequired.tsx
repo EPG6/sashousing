@@ -1,57 +1,19 @@
 'use client';
 
 import Image from 'next/image';
-import {
-    getAdditionalUserInfo,
-    GoogleAuthProvider,
-    signInWithPopup,
-    UserCredential,
-} from 'firebase/auth';
 import { useState } from 'react';
-import { auth } from '@/utils/firebase';
-
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+import { signInWithGoogleSession } from '@/utils/googleSignIn';
 
 export default function LoginRequired() {
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
-
-    const signInWithGoogle = async (result: UserCredential) => {
-        const idToken = await result.user.getIdToken();
-
-        const response = await fetch(`${backendUrl}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ idToken }),
-        });
-
-        if (!response.ok) {
-            throw new Error('Could not start a session');
-        }
-    };
 
     const login = async () => {
         setSubmitting(true);
         setError(null);
 
         try {
-            const provider = new GoogleAuthProvider();
-            provider.addScope('profile');
-            provider.addScope('email');
-
-            const result = await signInWithPopup(auth, provider);
-            console.log('Signed in user:', result.user);
-
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            if (!credential) {
-                throw new Error('Google Sign-In failed: No credential');
-            }
-
-            const additionalUserInfo = getAdditionalUserInfo(result);
-            console.log('Additional user info:', additionalUserInfo);
-
-            await signInWithGoogle(result);
+            await signInWithGoogleSession();
             window.location.reload();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Login failed');
@@ -74,7 +36,7 @@ export default function LoginRequired() {
                     className="mb-4 h-16 w-16 object-contain"
                 />
                 <h1 className="mb-2 font-display text-3xl font-semibold">
-                    Sign in to review housing
+                    Sign in to review housing and see room status.
                 </h1>
                 <p className="mb-5 text-sm text-sas-black/65">
                     Use your Google account to view and write room reviews.
@@ -86,8 +48,15 @@ export default function LoginRequired() {
                     type="button"
                     onClick={login}
                     disabled={submitting}
-                    className="mt-5 w-full rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
                 >
+                    <Image
+                        src="/google-sign.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                        className="h-5 w-5"
+                    />
                     {submitting ? 'Signing in...' : 'Sign in with Google'}
                 </button>
             </div>
