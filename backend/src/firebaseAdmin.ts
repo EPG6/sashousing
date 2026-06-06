@@ -1,4 +1,7 @@
 import admin from 'firebase-admin';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const getFirebasePrivateKey = () =>
     process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
@@ -26,13 +29,15 @@ const getServiceAccount = () => {
 if (!admin.apps.length) {
     const serviceAccount = getServiceAccount();
 
-    admin.initializeApp(
-        serviceAccount
-            ? {
-                  credential: admin.credential.cert(serviceAccount),
-              }
-            : undefined
-    );
+    if (!serviceAccount) {
+        throw new Error(
+            'Firebase Admin credentials are missing. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.'
+        );
+    }
+
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+    });
 }
 
 export const firebaseAuth = admin.auth();
