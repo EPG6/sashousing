@@ -21,10 +21,10 @@ Backend:
 ```sh
 MONGODB_URI=mongodb+srv://...
 SESSION_SECRET=replace-me
-FRONTEND_ORIGIN=http://localhost:3000
+FRONTEND_URL=http://localhost:3000
 ```
 
-For Vercel, deploy `frontend` and `backend` as separate projects. Set `NEXT_PUBLIC_BACKEND_URL` in the frontend to the deployed backend URL, and set `FRONTEND_ORIGIN` in the backend to the deployed frontend URL.
+For Vercel, deploy `frontend` and `backend` as separate projects. Set `NEXT_PUBLIC_BACKEND_URL` in the frontend to the deployed backend URL, and set `FRONTEND_URL` in the backend to the deployed frontend URL.
 
 ## Local Development
 

@@ -10,7 +10,7 @@ import { connectDb } from './db';
 dotenv.config();
 
 const app: Express = express();
-const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 const mongoUri = process.env.MONGODB_URI;
 
 if (!mongoUri) {
@@ -21,7 +21,7 @@ app.set('trust proxy', 1);
 
 app.use(
     cors({
-        origin: frontendOrigin.split(',').map((origin) => origin.trim()),
+        origin: frontendUrl.split(',').map((origin) => origin.trim()),
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
