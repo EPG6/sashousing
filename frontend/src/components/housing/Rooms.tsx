@@ -11,9 +11,9 @@ export const StarRating = ({ rating }: { rating: number }) => {
             {[...Array(totalStars)].map((_, i) => (
                 <span key={i} className="text-xl">
                     {i < fullStars ? (
-                        <span className="text-yellow-500">★</span>
+                        <span className="text-sas-green">★</span>
                     ) : (
-                        <span className="text-gray-300">★</span>
+                        <span className="text-sas-line">★</span>
                     )}
                 </span>
             ))}
@@ -38,36 +38,48 @@ export const getRoomOccupancyType = (occupancy_type: number | undefined) => {
     }
 };
 
-export const RoomCard = ({ buildingName, room }: RoomCardProps) => {
+export const RoomCard = ({
+    buildingName,
+    room,
+    canViewReviews = true,
+}: RoomCardProps) => {
     return (
-        <div className="w-full border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+        <div className="w-full rounded-md border border-sas-line bg-sas-white p-4 shadow-sm transition-shadow hover:border-sas-green hover:shadow-md">
             <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-800">
+                <h2 className="font-display text-xl font-semibold text-sas-black">
                     Room {room.room_number}
                 </h2>
-                <p className="text-sm text-gray-500">{buildingName}</p>
+                <p className="text-sm text-sas-black/55">{buildingName}</p>
             </div>
 
-            <div className="flex items-center mb-4">
-                <span className="text-gray-600 mr-2">Rating:</span>
-                {room.reviewCount && room.reviewCount > 0 ? (
-                    <div className="flex items-center">
-                        <StarRating rating={room.averageRating || 0} />
-                        <span className="ml-2 text-gray-500">
-                            ({room.reviewCount})
+            {canViewReviews ? (
+                <div className="mb-4 flex items-center">
+                    <span className="mr-2 text-sas-black/65">Rating:</span>
+                    {room.reviewCount && room.reviewCount > 0 ? (
+                        <div className="flex items-center">
+                            <StarRating rating={room.averageRating || 0} />
+                            <span className="ml-2 text-sas-black/55">
+                                ({room.reviewCount})
+                            </span>
+                        </div>
+                    ) : (
+                        <span className="text-sas-black/55">
+                            No ratings yet
                         </span>
-                    </div>
-                ) : (
-                    <span className="text-gray-500">No ratings yet</span>
-                )}
-            </div>
+                    )}
+                </div>
+            ) : (
+                <p className="mb-4 text-sm text-sas-black/55">
+                    Sign in to view reviews and ratings.
+                </p>
+            )}
 
             <div className="mb-6">
-                <p className="text-lg text-gray-700">
+                <p className="text-lg text-sas-black/75">
                     {getRoomOccupancyType(room.occupancy_type)}
                 </p>
                 {room.size && (
-                    <p className="text-lg text-gray-700">
+                    <p className="text-lg text-sas-black/75">
                         Size: {room.size} sq. ft.
                     </p>
                 )}
@@ -77,8 +89,8 @@ export const RoomCard = ({ buildingName, room }: RoomCardProps) => {
                 href={`/campus/housing/${room.housing_building_id}/${room.room_number}`}
                 prefetch={false}
             >
-                <button className="px-6 py-2 border border-blue-300 text-blue-500 rounded-md hover:bg-blue-50 transition-colors">
-                    View Reviews
+                <button className="rounded-md border border-sas-green px-6 py-2 font-medium text-sas-green transition-colors hover:bg-sas-green hover:text-sas-white">
+                    {canViewReviews ? 'View Reviews' : 'Sign in to View Reviews'}
                 </button>
             </Link>
         </div>

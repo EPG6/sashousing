@@ -1,7 +1,7 @@
 'use client';
 
 import Loading from '@/components/Loading';
-import LoginRequired from '@/components/LoginRequired';
+import SiteHeader from '@/components/SiteHeader';
 import { RoomCard } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
 import { Building, Room } from '@/types';
@@ -36,22 +36,27 @@ export default function DynamicRooms() {
                     return;
                 }
 
-                // 1. Fetch building + rooms in parallel
-                const [buildingResponse, roomsResponse, ratingsResponse] =
-                    await Promise.all([
-                        fetch(
-                            `${backendUrl}/api/campus/housing/${buildingId}`,
-                            { credentials: 'include' }
-                        ),
-                        fetch(
-                            `${backendUrl}/api/campus/housing/${buildingId}/rooms`,
-                            { credentials: 'include' }
-                        ),
+                const requests = [
+                    fetch(`${backendUrl}/api/campus/housing/${buildingId}`, {
+                        credentials: 'include',
+                    }),
+                    fetch(
+                        `${backendUrl}/api/campus/housing/${buildingId}/rooms`,
+                        { credentials: 'include' }
+                    ),
+                ];
+
+                if (!authLoading && user) {
+                    requests.push(
                         fetch(
                             `${backendUrl}/api/campus/housing/${buildingId}/ratings`,
                             { credentials: 'include' }
-                        ),
-                    ]);
+                        )
+                    );
+                }
+
+                const [buildingResponse, roomsResponse, ratingsResponse] =
+                    await Promise.all(requests);
 
                 if (!buildingResponse.ok) {
                     if (buildingResponse.status === 404) {
@@ -75,7 +80,7 @@ export default function DynamicRooms() {
                         roomsResponse.ok
                             ? roomsResponse.json()
                             : ([] as Room[]),
-                        ratingsResponse.ok
+                        ratingsResponse?.ok
                             ? ratingsResponse.json()
                             : ({} as Record<
                                   number,
@@ -111,29 +116,28 @@ export default function DynamicRooms() {
         };
 
         fetchRooms();
-    }, [id]);
+    }, [id, user, authLoading]);
 
-    if (loading || authLoading) {
+    if (loading) {
         return <Loading />;
-    }
-
-    if (!user) {
-        return <LoginRequired />;
     }
 
     if (buildingNotFound || !building) {
         return (
-            <div className="min-h-screen bg-gray-100 text-gray-900">
-                <div className="flex items-center justify-center min-h-[calc(100vh-12rem)] container mx-auto px-4">
-                    <div className="text-center max-w-md w-full p-6 bg-white rounded-lg shadow-sm">
-                        <h1 className="text-3xl font-bold text-red-500">
+            <div className="min-h-screen bg-sas-mist text-sas-black">
+                <SiteHeader />
+                <div className="mx-auto flex min-h-[calc(100vh-12rem)] max-w-6xl items-center justify-center px-4">
+                    <div className="w-full max-w-md rounded-md border border-sas-line bg-sas-white p-6 text-center shadow-sm">
+                        <h1 className="font-display text-3xl font-semibold text-sas-green">
                             Building Not Found
                         </h1>
-                        <p className="text-lg text-gray-700 mt-4">
+                        <p className="mt-4 text-lg text-sas-black/80">
                             The building you&apos;re looking for doesn&apos;t
                             exist. Please check the URL and try again.
                         </p>
-                        <p className="text-gray-600 mt-2">Error: {error}</p>
+                        <p className="mt-2 text-sas-black/60">
+                            Error: {error}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -141,8 +145,9 @@ export default function DynamicRooms() {
     }
     if (error && !buildingNotFound) {
         return (
-            <div className="min-h-screen bg-gray-100 text-gray-900">
-                <div className="flex items-center justify-center h-screen text-red-500">
+            <div className="min-h-screen bg-sas-mist text-sas-black">
+                <SiteHeader />
+                <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center text-sas-green">
                     <p>{error}</p>
                 </div>
             </div>
@@ -150,32 +155,35 @@ export default function DynamicRooms() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 text-gray-900">
-            <div className="container mx-auto px-4 py-8">
+        <div className="min-h-screen bg-sas-mist text-sas-black">
+            <SiteHeader />
+            <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
                 {/* Back Button */}
                 <button
                     onClick={() => router.back()}
-                    className="mb-6 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="mb-6 inline-flex items-center rounded-md border border-sas-line bg-sas-white px-4 py-2 text-sm font-medium text-sas-black shadow-sm hover:border-sas-green hover:text-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2"
                 >
                     Back
                 </button>
 
-                <h1 className="text-4xl font-bold mb-4">{building.name}</h1>
+                <h1 className="mb-4 font-display text-4xl font-semibold text-sas-black">
+                    {building.name}
+                </h1>
                 <Image
                     src={`/buildings/${safeName}.jpg`}
                     width={800}
                     height={400}
                     alt={building.name}
-                    className="w-full max-h-[500px] object-cover mb-6 rounded-lg"
+                    className="mb-6 max-h-[500px] w-full rounded-md object-cover"
                 />
-                <p className="text-lg text-gray-700 mb-4">
+                <p className="mb-4 text-lg text-sas-black/75">
                     {building.description}
                 </p>
 
                 {/* Button to toggle floor plans */}
                 <button
                     onClick={() => setShowFloorPlans(!showFloorPlans)}
-                    className="mb-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                    className="mb-4 rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white transition-colors hover:bg-sas-black"
                 >
                     {showFloorPlans ? 'Hide Floor Plans' : 'Show Floor Plans'}
                 </button>
@@ -183,7 +191,7 @@ export default function DynamicRooms() {
                 {/* Conditionally render floor plans */}
                 {showFloorPlans && (
                     <div className="mb-8">
-                        <h2 className="text-2xl font-semibold mb-4 text-gray-800">
+                        <h2 className="mb-4 font-display text-2xl font-semibold text-sas-green">
                             Floor Plans
                         </h2>
                         <div className="grid gap-6 pb-6 grid-cols-1 sm:grid-cols-2">
@@ -209,7 +217,7 @@ export default function DynamicRooms() {
                                                 width={800}
                                                 height={400}
                                                 alt={`Floor plan ${i + 1}`}
-                                                className={`w-full h-auto rounded-lg border border-gray-200 shadow ${
+                                                className={`h-auto w-full rounded-md border border-sas-line shadow-sm ${
                                                     shouldSpanAndCenter
                                                         ? 'sm:max-w-2xl'
                                                         : ''
@@ -224,10 +232,10 @@ export default function DynamicRooms() {
                 )}
 
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800">
+                    <h1 className="font-display text-3xl font-semibold text-sas-black">
                         Rooms in {building.name}
                     </h1>
-                    <p className="text-gray-600 mt-2">
+                    <p className="mt-2 text-sas-black/65">
                         {building.name} has {rooms.length} room
                         {rooms.length !== 1 ? 's' : ''}
                     </p>
@@ -240,12 +248,13 @@ export default function DynamicRooms() {
                                 key={room.id}
                                 buildingName={building.name}
                                 room={room}
+                                canViewReviews={!!user}
                             />
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center py-12 bg-gray-50 rounded-lg">
-                        <p className="text-lg text-gray-700">
+                    <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">
+                        <p className="text-lg text-sas-black/75">
                             No rooms found for this building.
                         </p>
                     </div>

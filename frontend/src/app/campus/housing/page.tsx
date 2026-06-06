@@ -4,9 +4,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import Loading from '@/components/Loading';
-import { useAuth } from '@/hooks/useAuth';
-import LoginRequired from '@/components/LoginRequired';
 import { backendUrl } from '@/utils/api';
+import SiteHeader from '@/components/SiteHeader';
 
 type BuildingDoc = {
     id: number;
@@ -33,16 +32,9 @@ const HousingPage = () => {
     const [housingData, setHousingData] = useState<CampusGroup[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const { user, loading: authLoading } = useAuth();
 
     useEffect(() => {
         const fetchHousingData = async () => {
-            // Ensure the user is authenticated before fetching
-            if (!user) {
-                setLoading(false);
-                return;
-            }
-
             try {
                 const response = await fetch(
                     `${backendUrl}/api/campus/housing`,
@@ -104,24 +96,18 @@ const HousingPage = () => {
             }
         };
 
-        // Only run fetch if auth has loaded and a user exists
-        if (!authLoading) {
-            fetchHousingData();
-        }
-    }, [user, authLoading]); // Re-run if auth state changes
+        fetchHousingData();
+    }, []);
 
-    if (authLoading || loading) {
+    if (loading) {
         return <Loading />;
-    }
-
-    if (!user) {
-        return <LoginRequired />;
     }
 
     if (error) {
         return (
-            <div className="min-h-screen bg-gray-100 text-gray-900">
-                <div className="flex items-center justify-center h-screen text-red-500">
+            <div className="min-h-screen bg-sas-mist text-sas-black">
+                <SiteHeader />
+                <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center text-sas-green">
                     <p>{error}</p>
                 </div>
             </div>
@@ -129,11 +115,21 @@ const HousingPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 text-gray-900">
-            <div className="container mx-auto p-6">
+        <div className="min-h-screen bg-sas-mist text-sas-black">
+            <SiteHeader />
+            <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+                <div className="mb-10 border-b border-sas-line pb-5">
+                    <h1 className="font-display text-4xl font-semibold text-sas-black">
+                        SAS Housing Reviews
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sas-black/70">
+                        Browse residence halls and room reviews from the student
+                        community.
+                    </p>
+                </div>
                 {housingData.map((campus, index) => (
                     <section key={index} className="mb-12">
-                        <h2 className="text-3xl font-semibold mb-6 text-gray-700 border-b-2 border-gray-200 pb-2">
+                        <h2 className="mb-6 border-b border-sas-line pb-2 font-display text-3xl font-semibold text-sas-green">
                             {campus.campus}
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -141,7 +137,7 @@ const HousingPage = () => {
                                 <Link
                                     key={building.id}
                                     href={`/campus/housing/${building.id}`}
-                                    className="block bg-white shadow-lg rounded-lg overflow-hidden transform transition-transform duration-300 hover:scale-105"
+                                    className="block overflow-hidden rounded-md border border-sas-line bg-sas-white shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-sas-green"
                                 >
                                     <Image
                                         src={building.image}
@@ -151,17 +147,17 @@ const HousingPage = () => {
                                         className="w-full h-48 object-cover"
                                     />
                                     <div className="p-6">
-                                        <h3 className="text-xl font-bold text-gray-800 mb-2">
+                                        <h3 className="mb-2 font-display text-2xl font-semibold text-sas-black">
                                             {building.name}
                                         </h3>
-                                        <p className="text-sm text-gray-600">
+                                        <p className="text-sm text-sas-black/70">
                                             {building.description?.slice(
                                                 0,
                                                 100
                                             )}
                                             ...
                                         </p>
-                                        <span className="mt-4 inline-block text-blue-600 hover:underline">
+                                        <span className="mt-4 inline-block font-medium text-sas-green hover:underline">
                                             View Details
                                         </span>
                                     </div>
