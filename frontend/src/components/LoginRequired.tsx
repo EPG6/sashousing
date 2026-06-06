@@ -1,12 +1,34 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 import { signInWithGoogleSession } from '@/utils/googleSignIn';
 
 export default function LoginRequired() {
+    const router = useRouter();
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+
+    const closeModal = useCallback(() => {
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+
+        router.push('/campus/housing');
+    }, [router]);
+
+    useEffect(() => {
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        };
+
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [closeModal]);
 
     const login = async () => {
         setSubmitting(true);
@@ -23,10 +45,24 @@ export default function LoginRequired() {
     };
 
     return (
-        <main className="flex min-h-screen items-center justify-center bg-sas-mist px-4 text-sas-black">
+        <main
+            className="fixed inset-0 z-50 flex min-h-screen items-center justify-center bg-sas-black/45 px-4 text-sas-black"
+            onClick={closeModal}
+            aria-modal="true"
+            role="dialog"
+        >
             <div
-                className="w-full max-w-sm rounded-md border border-sas-line bg-sas-white p-6 shadow-sm"
+                className="relative w-full max-w-sm rounded-md border border-sas-line bg-sas-white p-6 shadow-sm"
+                onClick={(event) => event.stopPropagation()}
             >
+                <button
+                    type="button"
+                    onClick={closeModal}
+                    className="absolute right-3 top-3 rounded-md px-2 py-1 text-xl leading-none text-sas-black/55 hover:text-sas-green"
+                    aria-label="Close sign-in modal"
+                >
+                    &times;
+                </button>
                 <Image
                     src="/logos/saslogo.png"
                     alt="SAS"
