@@ -93,7 +93,7 @@ export default function SiteHeader() {
                                 />
                                 {loggingIn
                                     ? 'Signing in...'
-                                    : 'Sign in with Google'}
+                                    : 'Google Sign in'}
                             </button>
                         ))}
                 </div>
