@@ -17,10 +17,6 @@ export const signInWithGoogleSession = async () => {
         throw new Error('Google Sign-In failed: No credential');
     }
 
-    const additionalUserInfo = getAdditionalUserInfo(result);
-    console.log('Signed in user:', result.user);
-    console.log('Additional user info:', additionalUserInfo);
-
     const idToken = await result.user.getIdToken();
     const response = await fetch(`${backendUrl}/api/auth/login`, {
         method: 'POST',
