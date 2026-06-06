@@ -18,11 +18,11 @@ export default function SiteHeader() {
                         className="h-12 w-12 object-contain"
                     />
                     <span className="font-display text-2xl font-semibold leading-none">
-                        Housing Reviews
+                        Housing Platform
                     </span>
                 </Link>
                 <span className="hidden text-sm uppercase text-sas-green sm:inline">
-                    Student Affairs Senate
+                    Scripps Associated Students
                 </span>
             </div>
         </header>
