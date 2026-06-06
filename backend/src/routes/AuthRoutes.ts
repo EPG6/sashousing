@@ -1,4 +1,6 @@
 import express, { Request, Response } from 'express';
+import { getFirebaseAuth } from '../firebaseAdmin';
+import { Users } from '../models/User';
 
 const router = express.Router();
 
@@ -11,29 +13,62 @@ router.get('/current_user', (req: Request, res: Response) => {
     res.json({ user: req.session.user });
 });
 
-router.post('/login', (req: Request, res: Response) => {
-    const email = String(req.body.email || '').trim().toLowerCase();
-    const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+router.post('/login', async (req: Request, res: Response) => {
+    const idToken = String(req.body.idToken || '');
 
-    if (!isValidEmail) {
-        res.status(400).json({ message: 'Valid email is required' });
+    if (!idToken) {
+        res.status(400).json({ message: 'Firebase ID token is required' });
         return;
     }
 
-    const [namePart] = email.split('@');
-    const [firstName = 'Housing', lastName = 'Reviewer'] = namePart
-        .split(/[._-]/)
-        .filter(Boolean);
+    try {
+        const decodedToken = await getFirebaseAuth().verifyIdToken(idToken);
+        const email = decodedToken.email?.trim().toLowerCase();
 
-    req.session.user = {
-        id: email,
-        email,
-        firstName,
-        lastName,
-        isAdmin: false,
-    };
+        if (!email) {
+            res.status(400).json({ message: 'Google account email is required' });
+            return;
+        }
 
-    res.status(200).json({ user: req.session.user });
+        const [firstName = 'Housing', ...lastNameParts] = (
+            decodedToken.name || email.split('@')[0]
+        )
+            .split(/\s+/)
+            .filter(Boolean);
+        const lastName = lastNameParts.join(' ') || 'Reviewer';
+
+        const user = await Users.findOneAndUpdate(
+            { uid: decodedToken.uid },
+            {
+                $set: {
+                    email,
+                    firstName,
+                    lastName,
+                },
+                $setOnInsert: {
+                    isAdmin: false,
+                },
+            },
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true,
+            }
+        );
+
+        req.session.user = {
+            id: user.uid,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            isAdmin: user.isAdmin,
+        };
+
+        res.status(200).json({ user: req.session.user });
+    } catch (error) {
+        console.error('Firebase login error:', error);
+        res.status(401).json({ message: 'Invalid Google sign-in token' });
+    }
 });
 
 router.post('/logout', (req: Request, res: Response) => {

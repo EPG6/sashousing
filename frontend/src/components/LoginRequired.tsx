@@ -1,32 +1,41 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
-
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { signInWithGoogleSession } from '@/utils/googleSignIn';
 
 export default function LoginRequired() {
-    const [email, setEmail] = useState('');
+    const router = useRouter();
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
-    const login = async (event: React.FormEvent) => {
-        event.preventDefault();
+    const closeModal = useCallback(() => {
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+
+        router.push('/campus/housing');
+    }, [router]);
+
+    useEffect(() => {
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        };
+
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [closeModal]);
+
+    const login = async () => {
         setSubmitting(true);
         setError(null);
 
         try {
-            const response = await fetch(`${backendUrl}/api/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ email }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Could not start a session');
-            }
-
+            await signInWithGoogleSession();
             window.location.reload();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Login failed');
@@ -36,11 +45,24 @@ export default function LoginRequired() {
     };
 
     return (
-        <main className="flex min-h-screen items-center justify-center bg-sas-mist px-4 text-sas-black">
-            <form
-                onSubmit={login}
-                className="w-full max-w-sm rounded-md border border-sas-line bg-sas-white p-6 shadow-sm"
+        <main
+            className="fixed inset-0 z-50 flex min-h-screen items-center justify-center bg-sas-black/45 px-4 text-sas-black"
+            onClick={closeModal}
+            aria-modal="true"
+            role="dialog"
+        >
+            <div
+                className="relative w-full max-w-sm rounded-md border border-sas-line bg-sas-white p-6 shadow-sm"
+                onClick={(event) => event.stopPropagation()}
             >
+                <button
+                    type="button"
+                    onClick={closeModal}
+                    className="absolute right-3 top-3 rounded-md px-2 py-1 text-xl leading-none text-sas-black/55 hover:text-sas-green"
+                    aria-label="Close sign-in modal"
+                >
+                    &times;
+                </button>
                 <Image
                     src="/logos/saslogo.png"
                     alt="SAS"
@@ -50,36 +72,30 @@ export default function LoginRequired() {
                     className="mb-4 h-16 w-16 object-contain"
                 />
                 <h1 className="mb-2 font-display text-3xl font-semibold">
-                    Sign in to review housing
+                    Sign in to review housing and see room status.
                 </h1>
                 <p className="mb-5 text-sm text-sas-black/65">
-                    Enter an email to start a session.
+                    Use your Google account to view and write room reviews.
                 </p>
-                <label
-                    className="text-sm font-medium text-sas-black"
-                    htmlFor="email"
-                >
-                    Email
-                </label>
-                <input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-sas-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sas-green"
-                />
                 {error && (
                     <p className="mt-3 text-sm text-sas-green">{error}</p>
                 )}
                 <button
-                    type="submit"
+                    type="button"
+                    onClick={login}
                     disabled={submitting}
-                    className="mt-5 w-full rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
                 >
-                    {submitting ? 'Signing in...' : 'Sign in'}
+                    <Image
+                        src="/google-sign.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                        className="h-5 w-5"
+                    />
+                    {submitting ? 'Signing in...' : 'Google Sign in'}
                 </button>
-            </form>
+            </div>
         </main>
     );
 }
