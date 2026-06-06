@@ -3,16 +3,36 @@
 @tailwind utilities;
 
 :root {
-    --background: #f3f4f6;
-    --foreground: #111827;
+    --background: #f6f7f3;
+    --foreground: #191919;
+    --sas-green: #3b561e;
+    --sas-line: #d8ddcf;
 }
 
 body {
     background: var(--background);
     color: var(--foreground);
+    font-family:
+        'ITC Franklin Gothic Lt', 'Helvetica Now Condensed', 'Arial Narrow',
+        Arial, sans-serif;
+    letter-spacing: 0;
 }
 
 button,
 a {
     transition-duration: 150ms;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+    font-family:
+        'Traditional Arabic', 'ITC Franklin Gothic Lt',
+        'Helvetica Now Condensed', Arial, sans-serif;
+}
+
+::selection {
+    background: var(--sas-green);
+    color: #ffffff;
 }

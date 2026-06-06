@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
@@ -35,18 +36,29 @@ export default function LoginRequired() {
     };
 
     return (
-        <main className="min-h-screen bg-gray-100 text-gray-900 flex items-center justify-center px-4">
+        <main className="flex min-h-screen items-center justify-center bg-sas-mist px-4 text-sas-black">
             <form
                 onSubmit={login}
-                className="w-full max-w-sm rounded-md bg-white p-6 shadow-sm border border-gray-200"
+                className="w-full max-w-sm rounded-md border border-sas-line bg-sas-white p-6 shadow-sm"
             >
-                <h1 className="text-2xl font-semibold mb-2">
+                <Image
+                    src="/logos/saslogo.png"
+                    alt="SAS"
+                    width={72}
+                    height={69}
+                    priority
+                    className="mb-4 h-16 w-16 object-contain"
+                />
+                <h1 className="mb-2 font-display text-3xl font-semibold">
                     Sign in to review housing
                 </h1>
-                <p className="text-sm text-gray-600 mb-5">
+                <p className="mb-5 text-sm text-sas-black/65">
                     Enter an email to start a session.
                 </p>
-                <label className="text-sm font-medium text-gray-700" htmlFor="email">
+                <label
+                    className="text-sm font-medium text-sas-black"
+                    htmlFor="email"
+                >
                     Email
                 </label>
                 <input
@@ -55,13 +67,15 @@ export default function LoginRequired() {
                     required
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-md border border-sas-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sas-green"
                 />
-                {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+                {error && (
+                    <p className="mt-3 text-sm text-sas-green">{error}</p>
+                )}
                 <button
                     type="submit"
                     disabled={submitting}
-                    className="mt-5 w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                    className="mt-5 w-full rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
                 >
                     {submitting ? 'Signing in...' : 'Sign in'}
                 </button>

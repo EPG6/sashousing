@@ -48,7 +48,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
     };
 
     const baseStarClass =
-        'text-xl text-gray-300 cursor-pointer transition-colors duration-300';
+        'text-xl text-sas-line cursor-pointer transition-colors duration-300';
 
     const [comments, setComments] = useState<string>('');
     const [pictures, setPictures] = useState<FileList | null>(null);
@@ -179,7 +179,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                             className={`${baseStarClass} ${
                                 ratings.overall >= value ||
                                 hoveredStar.overall >= value
-                                    ? 'text-yellow-500'
+                                    ? 'text-sas-green'
                                     : ''
                             }`}
                         >
@@ -188,7 +188,9 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                     ))}
                 </div>
                 {formErrors.overall && (
-                    <p style={{ color: 'red' }}>{formErrors.overall}</p>
+                    <p className="text-sm text-sas-green">
+                        {formErrors.overall}
+                    </p>
                 )}
             </div>
 
@@ -205,7 +207,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                             className={`${baseStarClass} ${
                                 ratings.quiet >= value ||
                                 hoveredStar.quiet >= value
-                                    ? 'text-yellow-500'
+                                    ? 'text-sas-green'
                                     : ''
                             }`}
                         >
@@ -214,7 +216,9 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                     ))}
                 </div>
                 {formErrors.quiet && (
-                    <p style={{ color: 'red' }}>{formErrors.quiet}</p>
+                    <p className="text-sm text-sas-green">
+                        {formErrors.quiet}
+                    </p>
                 )}
             </div>
 
@@ -233,7 +237,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                             className={`${baseStarClass} ${
                                 ratings.layout >= value ||
                                 hoveredStar.layout >= value
-                                    ? 'text-yellow-500'
+                                    ? 'text-sas-green'
                                     : ''
                             }`}
                         >
@@ -242,7 +246,9 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                     ))}
                 </div>
                 {formErrors.layout && (
-                    <p style={{ color: 'red' }}>{formErrors.layout}</p>
+                    <p className="text-sm text-sas-green">
+                        {formErrors.layout}
+                    </p>
                 )}
             </div>
 
@@ -265,7 +271,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                             className={`${baseStarClass} ${
                                 ratings.temperature >= value ||
                                 hoveredStar.temperature >= value
-                                    ? 'text-yellow-500'
+                                    ? 'text-sas-green'
                                     : ''
                             }`}
                         >
@@ -274,7 +280,9 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                     ))}
                 </div>
                 {formErrors.temperature && (
-                    <p style={{ color: 'red' }}>{formErrors.temperature}</p>
+                    <p className="text-sm text-sas-green">
+                        {formErrors.temperature}
+                    </p>
                 )}
             </div>
 
@@ -287,10 +295,12 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                     onChange={handleCommentsChange}
                     placeholder="Write your comments here..."
                     rows={4}
-                    className="border rounded p-2 w-full"
+                    className="w-full rounded-md border border-sas-line p-2 focus:outline-none focus:ring-2 focus:ring-sas-green"
                 />
                 {formErrors.comments && (
-                    <p style={{ color: 'red' }}>{formErrors.comments}</p>
+                    <p className="text-sm text-sas-green">
+                        {formErrors.comments}
+                    </p>
                 )}
             </div>
 
@@ -302,7 +312,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                     type="file"
                     multiple
                     onChange={handlePicturesChange}
-                    className="border rounded p-2 w-full"
+                    className="w-full rounded-md border border-sas-line p-2"
                 />
 
                 <div className="flex">
@@ -329,7 +339,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
             {/* Submit Button */}
             <button
                 type="submit"
-                className="bg-blue-500 text-white py-2 px-4 rounded mt-4"
+                className="mt-4 rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black"
             >
                 Submit
             </button>
@@ -350,13 +360,13 @@ export const PictureModal = ({
 
     return (
         <div
-            className="fixed top-0 left-0 right-0 bottom-0 bg-black bg-opacity-10 flex justify-center items-center z-50"
+            className="fixed bottom-0 left-0 right-0 top-0 z-50 flex items-center justify-center bg-sas-black bg-opacity-40"
             onClick={onClose}
         >
-            <div className="bg-white p-4 rounded max-w-4xl max-h-screen overflow-auto relative">
+            <div className="relative max-h-screen max-w-4xl overflow-auto rounded-md bg-sas-white p-4">
                 <button
                     onClick={onClose}
-                    className="absolute top-2 right-2 text-3xl font-bold text-gray-500 hover:text-red-700"
+                    className="absolute right-2 top-2 text-3xl font-bold text-sas-black/60 hover:text-sas-green"
                 >
                     &times;
                 </button>

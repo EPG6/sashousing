@@ -23,9 +23,9 @@ const getParam = (param: string | string[]): string =>
 /**
  * @route   GET /api/campus/housing
  * @desc    Get all housing buildings
- * @access  isAuthenticated
+ * @access  Public
  */
-router.get('/', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
     try {
         const buildings = await HousingBuildings.find({});
         res.json(buildings);
@@ -37,11 +37,10 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
 /**
  * @route   GET /api/campus/housing/:building
  * @desc    Get housing building by id
- * @access  isAuthenticated
+ * @access  Public
  */
 router.get(
     '/:building',
-    isAuthenticated,
     async (req: Request, res: Response) => {
         try {
             // Get building id
@@ -73,11 +72,10 @@ router.get(
 /**
  * @route   GET /campus/housing/:building/rooms
  * @desc    Get all roms in a building (by building id)
- * @access  isAuthenticated
+ * @access  Public
  */
 router.get(
     '/:building/rooms',
-    isAuthenticated,
     async (req: Request, res: Response) => {
         try {
             // Get building id

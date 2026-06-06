@@ -3,8 +3,11 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
 export const metadata: Metadata = {
-    title: 'SA Housing Reviews',
-    description: 'Standalone housing reviews for rooms and residence halls.',
+    title: 'SA Housing Plaform',
+    description: 'Review Rooms. View Room Status.',
+    icons: {
+        icon: '/logos/saslogo.png',
+    },
 };
 
 export default function RootLayout({

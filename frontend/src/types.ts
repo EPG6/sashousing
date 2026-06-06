@@ -59,6 +59,7 @@ export interface RoomWithReviews {
 export interface RoomCardProps {
     buildingName: string;
     room: Room;
+    canViewReviews?: boolean;
 }
 
 export interface ReviewFormProps {

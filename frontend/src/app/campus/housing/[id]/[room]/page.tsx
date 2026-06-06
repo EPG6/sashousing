@@ -2,6 +2,7 @@
 
 import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
+import SiteHeader from '@/components/SiteHeader';
 import { PictureModal, ReviewForm } from '@/components/housing/Reviews';
 import { StarRating, getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
@@ -144,18 +145,19 @@ const RoomPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 text-gray-900">
-            <div className="container mx-auto px-4 py-8">
+        <div className="min-h-screen bg-sas-mist text-sas-black">
+            <SiteHeader />
+            <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
                 {/* Back Button */}
                 <button
                     onClick={() => router.back()}
-                    className="mb-6 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="mb-6 inline-flex items-center rounded-md border border-sas-line bg-sas-white px-4 py-2 text-sm font-medium text-sas-black shadow-sm hover:border-sas-green hover:text-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2"
                 >
                     Back
                 </button>
 
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800">
+                    <h1 className="font-display text-3xl font-semibold text-sas-black">
                         Reviews for {buildingName} {room}
                     </h1>
 
@@ -164,12 +166,12 @@ const RoomPage = () => {
                         roomReviews.averages &&
                         roomReviews.averages.reviewCount > 0 ? (
                             <>
-                                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                                    <h4 className="text-lg font-medium mb-3">
+                                <div className="mb-6 rounded-md border border-sas-line bg-sas-white p-4">
+                                    <h4 className="mb-3 font-display text-xl font-semibold text-sas-green">
                                         Summary
                                     </h4>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <p className="text-gray-600">
+                                        <p className="text-sas-black/65">
                                             Occupancy:{' '}
                                             {getRoomOccupancyType(
                                                 roomReviews.room.occupancy_type
@@ -177,13 +179,13 @@ const RoomPage = () => {
                                         </p>
 
                                         {roomReviews.room.size && (
-                                            <p className="text-gray-600">
+                                            <p className="text-sas-black/65">
                                                 Size: {roomReviews.room.size}{' '}
                                                 sq. ft.
                                             </p>
                                         )}
                                         <div>
-                                            <p className="text-gray-600">
+                                            <p className="text-sas-black/65">
                                                 Overall
                                             </p>
                                             <div className="flex items-center">
@@ -201,7 +203,7 @@ const RoomPage = () => {
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-gray-600">
+                                            <p className="text-sas-black/65">
                                                 Quiet
                                             </p>
                                             <div className="flex items-center">
@@ -219,7 +221,7 @@ const RoomPage = () => {
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-gray-600">
+                                            <p className="text-sas-black/65">
                                                 Layout
                                             </p>
                                             <div className="flex items-center">
@@ -237,7 +239,7 @@ const RoomPage = () => {
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-gray-600">
+                                            <p className="text-sas-black/65">
                                                 Temperature
                                             </p>
                                             <div className="flex items-center">
@@ -255,7 +257,7 @@ const RoomPage = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <p className="text-gray-500 mt-3">
+                                    <p className="mt-3 text-sas-black/55">
                                         Based on{' '}
                                         {roomReviews.averages.reviewCount}{' '}
                                         review
@@ -266,7 +268,7 @@ const RoomPage = () => {
                                 </div>
 
                                 <div className="py-4">
-                                    <hr className="border-t border-gray-300" />
+                                    <hr className="border-t border-sas-line" />
                                 </div>
 
                                 {/* User Reviews */}
@@ -274,11 +276,11 @@ const RoomPage = () => {
                                     {roomReviews.reviews.map((review) => (
                                         <div
                                             key={review._id}
-                                            className="border-b pb-4"
+                                            className="border-b border-sas-line pb-4"
                                         >
                                             <div className="flex justify-between mb-2">
-                                                <div className="flex items-center p-3 bg-gray-50 rounded-lg">
-                                                    <span className="text-m text-gray-600 mr-2">
+                                                <div className="flex items-center rounded-md bg-sas-white p-3">
+                                                    <span className="text-m mr-2 text-sas-black/65">
                                                         Overall Rating:
                                                     </span>
                                                     <span>
@@ -298,7 +300,7 @@ const RoomPage = () => {
                                                 {review.isOwner && (
                                                     <div className="flex p-2 gap-4">
                                                         <button
-                                                            className="bg-blue-500 text-white text-m px-4 rounded-md hover:bg-blue-600"
+                                                            className="text-m rounded-md bg-sas-green px-4 py-2 text-sas-white hover:bg-sas-black"
                                                             onClick={() => {
                                                                 setSelectedReview(
                                                                     review
@@ -309,7 +311,7 @@ const RoomPage = () => {
                                                             Edit
                                                         </button>
                                                         <button
-                                                            className="bg-red-500 text-white text-m px-4 rounded-md hover:bg-red-600"
+                                                            className="text-m rounded-md border border-sas-green px-4 py-2 text-sas-green hover:bg-sas-green hover:text-sas-white"
                                                             onClick={() => {
                                                                 handleDelete(
                                                                     review.id
@@ -324,7 +326,7 @@ const RoomPage = () => {
 
                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
                                                 <div className="text-sm flex items-center mb-2">
-                                                    <span className="text-gray-600 mr-2">
+                                                    <span className="mr-2 text-sas-black/65">
                                                         Quiet:
                                                     </span>
                                                     <span className="inline">
@@ -337,7 +339,7 @@ const RoomPage = () => {
                                                     </span>
                                                 </div>
                                                 <div className="text-sm flex items-center mb-1">
-                                                    <span className="text-gray-600 mr-2">
+                                                    <span className="mr-2 text-sas-black/65">
                                                         Layout:
                                                     </span>
                                                     <span className="inline">
@@ -350,7 +352,7 @@ const RoomPage = () => {
                                                     </span>
                                                 </div>
                                                 <div className="text-sm flex items-center mb-2">
-                                                    <span className="text-gray-600 mr-2">
+                                                    <span className="mr-2 text-sas-black/65">
                                                         Temperature:
                                                     </span>
                                                     <span className="inline">
@@ -368,7 +370,7 @@ const RoomPage = () => {
                                                 <div className="mt-2 mb-2">
                                                     <FormattedReviewText
                                                         text={review.comments}
-                                                        className="text-gray-800"
+                                                        className="text-sas-black"
                                                     />
                                                 </div>
                                             )}
@@ -428,13 +430,13 @@ const RoomPage = () => {
 
                                             {/* Date written, last updated */}
                                             <div className="flex space-x-16">
-                                                <p className="text-gray-500 mt-3">
+                                                <p className="mt-3 text-sas-black/55">
                                                     Review written{' '}
                                                     {formatDate(
                                                         review.createdAt
                                                     )}
                                                 </p>
-                                                <p className="text-gray-500 mt-3">
+                                                <p className="mt-3 text-sas-black/55">
                                                     Last updated{' '}
                                                     {formatDate(
                                                         review.updatedAt
@@ -447,10 +449,10 @@ const RoomPage = () => {
                             </>
                         ) : (
                             <div className="flex flex-col items-center justify-center h-40">
-                                <p className="text-gray-500 text-lg">
+                                <p className="text-lg text-sas-black/55">
                                     No reviews yet for this room.
                                 </p>
-                                <p className="text-gray-400">
+                                <p className="text-sas-black/45">
                                     Be the first to leave a review!
                                 </p>
                             </div>
@@ -458,7 +460,7 @@ const RoomPage = () => {
                     </div>
 
                     <button
-                        className="px-6 py-2 border border-blue-300 text-blue-500 rounded-md hover:bg-blue-50 transition-colors mt-4 mb-6"
+                        className="mb-6 mt-4 rounded-md border border-sas-green px-6 py-2 font-medium text-sas-green transition-colors hover:bg-sas-green hover:text-sas-white"
                         onClick={handleAddNewReviewClick}
                         ref={targetRef}
                     >
