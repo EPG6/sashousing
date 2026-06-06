@@ -1,17 +1,16 @@
 import {
-    getAdditionalUserInfo,
     GoogleAuthProvider,
     signInWithPopup,
 } from 'firebase/auth';
 import { backendUrl } from '@/utils/api';
-import { auth } from '@/utils/firebase';
+import { getFirebaseAuth } from '@/utils/firebase';
 
 export const signInWithGoogleSession = async () => {
     const provider = new GoogleAuthProvider();
     provider.addScope('profile');
     provider.addScope('email');
 
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(getFirebaseAuth(), provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential) {
         throw new Error('Google Sign-In failed: No credential');

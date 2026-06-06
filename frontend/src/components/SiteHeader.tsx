@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/hooks/useAuth';
 import { backendUrl } from '@/utils/api';
-import { auth } from '@/utils/firebase';
+import { getFirebaseAuth } from '@/utils/firebase';
 import { signInWithGoogleSession } from '@/utils/googleSignIn';
 import { signOut } from 'firebase/auth';
 import Image from 'next/image';
@@ -31,7 +31,7 @@ export default function SiteHeader() {
         setLoggingOut(true);
 
         try {
-            await signOut(auth);
+            await signOut(getFirebaseAuth());
             await fetch(`${backendUrl}/api/auth/logout`, {
                 method: 'POST',
                 credentials: 'include',
