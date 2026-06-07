@@ -3,6 +3,11 @@ import { getFirebaseAuth } from '../firebaseAdmin';
 import { Users } from '../models/User';
 
 const router = express.Router();
+const usesSecureFrontend =
+    process.env.NODE_ENV === 'production' ||
+    process.env.RENDER === 'true' ||
+    Boolean(process.env.RENDER_SERVICE_ID) ||
+    (process.env.FRONTEND_URL || '').includes('https://');
 
 router.get('/current_user', (req: Request, res: Response) => {
     if (!req.session.user) {
@@ -78,7 +83,11 @@ router.post('/logout', (req: Request, res: Response) => {
             return;
         }
 
-        res.clearCookie('connect.sid');
+        res.clearCookie('connect.sid', {
+            secure: usesSecureFrontend,
+            sameSite: usesSecureFrontend ? 'none' : 'lax',
+            httpOnly: true,
+        });
         res.status(204).send();
     });
 });

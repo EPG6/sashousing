@@ -10,7 +10,22 @@ import { connectDb } from './db';
 dotenv.config();
 
 const app: Express = express();
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+const defaultFrontendOrigins = [
+    'http://localhost:3000',
+    'https://sashousing-frontend.vercel.app',
+];
+const frontendOrigins = [
+    ...defaultFrontendOrigins,
+    ...(process.env.FRONTEND_URL || '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+];
+const usesSecureFrontend =
+    process.env.NODE_ENV === 'production' ||
+    process.env.RENDER === 'true' ||
+    Boolean(process.env.RENDER_SERVICE_ID) ||
+    (process.env.FRONTEND_URL || '').includes('https://');
 const mongoUri = process.env.MONGODB_URI;
 
 if (!mongoUri) {
@@ -21,7 +36,14 @@ app.set('trust proxy', 1);
 
 app.use(
     cors({
-        origin: frontendUrl.split(',').map((origin) => origin.trim()),
+        origin: (origin, callback) => {
+            if (!origin || frontendOrigins.includes(origin)) {
+                callback(null, true);
+                return;
+            }
+
+            callback(new Error(`CORS origin not allowed: ${origin}`));
+        },
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
@@ -35,14 +57,15 @@ app.use(
         secret: process.env.SESSION_SECRET || 'replace-this-session-secret',
         resave: false,
         saveUninitialized: false,
+        proxy: usesSecureFrontend,
         store: MongoStore.create({
             mongoUrl: mongoUri,
             ttl: 24 * 60 * 60,
             autoRemove: 'native',
         }),
         cookie: {
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            secure: usesSecureFrontend,
+            sameSite: usesSecureFrontend ? 'none' : 'lax',
             httpOnly: true,
             maxAge: 24 * 60 * 60 * 1000,
         },
