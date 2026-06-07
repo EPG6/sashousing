@@ -3,7 +3,10 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { signInWithGoogleSession } from '@/utils/googleSignIn';
+import {
+    completeRedirectSignIn,
+    signInWithGoogleSession,
+} from '@/utils/googleSignIn';
 
 export default function LoginRequired() {
     const router = useRouter();
@@ -30,13 +33,37 @@ export default function LoginRequired() {
         return () => window.removeEventListener('keydown', closeOnEscape);
     }, [closeModal]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        completeRedirectSignIn()
+            .then((signedIn) => {
+                if (signedIn && !cancelled) {
+                    window.location.reload();
+                }
+            })
+            .catch((err) => {
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : 'Google sign-in failed'
+                );
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const login = async () => {
         setSubmitting(true);
         setError(null);
 
         try {
-            await signInWithGoogleSession();
-            window.location.reload();
+            const signedIn = await signInWithGoogleSession();
+            if (signedIn) {
+                window.location.reload();
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Login failed');
         } finally {
@@ -93,7 +120,7 @@ export default function LoginRequired() {
                         height={20}
                         className="h-5 w-5"
                     />
-                    {submitting ? 'Signing in...' : 'Google Sign in'}
+                    {submitting ? 'Signing in...' : 'Google Sign In'}
                 </button>
             </div>
         </main>
