@@ -3,23 +3,46 @@
 import { useAuth } from '@/hooks/useAuth';
 import { backendUrl } from '@/utils/api';
 import { getFirebaseAuth } from '@/utils/firebase';
-import { signInWithGoogleSession } from '@/utils/googleSignIn';
+import {
+    completeRedirectSignIn,
+    signInWithGoogleSession,
+} from '@/utils/googleSignIn';
 import { signOut } from 'firebase/auth';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function SiteHeader() {
     const { user, loading } = useAuth();
     const [loggingIn, setLoggingIn] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        completeRedirectSignIn()
+            .then((signedIn) => {
+                if (signedIn && !cancelled) {
+                    window.location.reload();
+                }
+            })
+            .catch((error) => {
+                console.error('Redirect login failed:', error);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const login = async () => {
         setLoggingIn(true);
 
         try {
-            await signInWithGoogleSession();
-            window.location.reload();
+            const signedIn = await signInWithGoogleSession();
+            if (signedIn) {
+                window.location.reload();
+            }
         } catch (error) {
             console.error('Login failed:', error);
         } finally {
@@ -93,7 +116,7 @@ export default function SiteHeader() {
                                 />
                                 {loggingIn
                                     ? 'Signing in...'
-                                    : 'Google Sign in'}
+                                    : 'Sign in with Google'}
                             </button>
                         ))}
                 </div>
