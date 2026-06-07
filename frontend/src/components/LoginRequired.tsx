@@ -120,7 +120,7 @@ export default function LoginRequired() {
                         height={20}
                         className="h-5 w-5"
                     />
-                    {submitting ? 'Signing in...' : 'Sign in with Google'}
+                    {submitting ? 'Signing in...' : 'Google Sign In'}
                 </button>
             </div>
         </main>
