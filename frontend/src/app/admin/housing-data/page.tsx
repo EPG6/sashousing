@@ -76,6 +76,9 @@ export default function HousingDataAdminPage() {
 
                 const data = (await response.json()) as BuildingSearchDoc[];
                 setBuildings(data);
+                if (data.length > 0) {
+                    setSelectedBuildingId(data[0].id);
+                }
             } catch (error) {
                 console.error('Housing data load error:', error);
                 setError('Could not load housing data.');
@@ -289,30 +292,59 @@ export default function HousingDataAdminPage() {
                     </p>
                 </div>
 
-                <label className="mb-6 block max-w-md">
-                    <span className="text-sm font-medium text-sas-black/75">
-                        Building
-                    </span>
-                    <select
-                        value={selectedBuildingId || ''}
-                        onChange={(event) => {
-                            const nextBuildingId = event.target.value
-                                ? Number(event.target.value)
-                                : null;
-                            setSelectedBuildingId(nextBuildingId);
-                        }}
-                        className="mt-2 w-full rounded-md border border-sas-line bg-sas-white px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                    >
-                        <option value="">Select a building</option>
-                        {buildings.map((building) => (
-                            <option key={building.id} value={building.id}>
-                                {building.name} ({building.roomNumbers.length}{' '}
-                                room
-                                {building.roomNumbers.length === 1 ? '' : 's'})
-                            </option>
-                        ))}
-                    </select>
-                </label>
+                <div className="mb-6">
+                    <p className="text-sm font-medium text-sas-black/75">
+                        Buildings
+                    </p>
+                    <div className="mt-2 flex gap-3 overflow-x-auto pb-3">
+                        {buildings.map((building) => {
+                            const isSelected =
+                                building.id === selectedBuildingId;
+
+                            return (
+                                <button
+                                    key={building.id}
+                                    type="button"
+                                    onClick={() =>
+                                        setSelectedBuildingId(building.id)
+                                    }
+                                    className={`min-w-[220px] rounded-md border p-4 text-left shadow-sm transition-colors ${
+                                        isSelected
+                                            ? 'border-sas-green bg-sas-green text-sas-white'
+                                            : 'border-sas-line bg-sas-white text-sas-black hover:border-sas-green'
+                                    }`}
+                                >
+                                    <span className="block font-display text-xl font-semibold">
+                                        {building.name}
+                                    </span>
+                                    <span
+                                        className={`mt-2 block text-sm ${
+                                            isSelected
+                                                ? 'text-sas-white/80'
+                                                : 'text-sas-black/60'
+                                        }`}
+                                    >
+                                        {building.campus}
+                                    </span>
+                                    <span
+                                        className={`mt-3 block text-sm ${
+                                            isSelected
+                                                ? 'text-sas-white/85'
+                                                : 'text-sas-black/70'
+                                        }`}
+                                    >
+                                        {building.floors} floor
+                                        {building.floors === 1 ? '' : 's'} ·{' '}
+                                        {building.roomNumbers.length} room
+                                        {building.roomNumbers.length === 1
+                                            ? ''
+                                            : 's'}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
 
                 {message && (
                     <p className="mb-4 text-sm text-sas-green">{message}</p>
