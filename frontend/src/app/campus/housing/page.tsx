@@ -153,7 +153,7 @@ const HousingPage = () => {
             <SiteHeader />
             <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
                 <div className="mb-10 border-b border-sas-line pb-5">
-                    <h1 className="font-display text-4xl font-semibold text-sas-black">
+                    <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">
                         SAS Housing Reviews
                     </h1>
                     <p className="mt-2 max-w-2xl text-sas-black/70">
@@ -178,7 +178,7 @@ const HousingPage = () => {
 
                 {filteredHousingData.map((campus, index) => (
                     <section key={index} className="mb-12">
-                        <h2 className="mb-6 border-b border-sas-line pb-2 font-display text-3xl font-semibold text-sas-green">
+                        <h2 className="mb-6 border-b border-sas-line pb-2 font-display text-xl font-semibold text-sas-green sm:text-3xl">
                             {campus.campus}
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -204,7 +204,7 @@ const HousingPage = () => {
                                         className="w-full h-48 object-cover"
                                     />
                                     <div className="p-6">
-                                        <h3 className="mb-2 font-display text-2xl font-semibold text-sas-black">
+                                        <h3 className="mb-2 font-display text-xl font-semibold text-sas-black sm:text-2xl">
                                             {building.name}
                                         </h3>
                                         <p className="text-sm text-sas-black/70">

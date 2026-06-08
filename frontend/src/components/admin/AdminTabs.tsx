@@ -21,7 +21,7 @@ const tabs = [
 
 export default function AdminTabs({ activeTab }: AdminTabsProps) {
     return (
-        <nav className="mb-8 flex flex-wrap gap-2 border-b border-sas-line pb-3">
+        <nav className="mb-8 flex gap-2 border-b border-sas-line pb-3">
             {tabs.map((tab) => {
                 const isActive = tab.id === activeTab;
 
@@ -29,9 +29,9 @@ export default function AdminTabs({ activeTab }: AdminTabsProps) {
                     <Link
                         key={tab.id}
                         href={tab.href}
-                        className={`rounded-md px-4 py-2 text-sm font-medium ${
+                        className={`flex-1 rounded-md px-4 py-2 text-center text-sm font-medium transition-all duration-200 ease-smooth sm:flex-none sm:text-left ${
                             isActive
-                                ? 'bg-sas-green text-sas-white'
+                                ? 'bg-sas-green text-sas-white shadow-sm'
                                 : 'border border-sas-line bg-sas-white text-sas-black hover:border-sas-green hover:text-sas-green'
                         }`}
                     >

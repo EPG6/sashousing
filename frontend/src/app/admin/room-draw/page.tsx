@@ -263,7 +263,7 @@ export default function RoomDrawAdminPage() {
                 <SiteHeader />
                 <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-center justify-center px-4">
                     <div className="w-full max-w-md rounded-md border border-sas-line bg-sas-white p-6 text-center shadow-sm">
-                        <h1 className="font-display text-3xl font-semibold text-sas-green">
+                        <h1 className="font-display text-2xl font-semibold text-sas-green sm:text-3xl">
                             Admin Access Required
                         </h1>
                         <p className="mt-3 text-sas-black/65">
@@ -289,7 +289,7 @@ export default function RoomDrawAdminPage() {
                 <AdminTabs activeTab="room-draw" />
 
                 <div className="mb-8 border-b border-sas-line pb-5">
-                    <h1 className="font-display text-4xl font-semibold text-sas-black">
+                    <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">
                         Room Draw Reporting
                     </h1>
                     <p className="mt-2 text-sas-black/70">
@@ -299,7 +299,7 @@ export default function RoomDrawAdminPage() {
 
                 <form
                     onSubmit={saveSettings}
-                    className="rounded-md border border-sas-line bg-sas-white p-6 shadow-sm"
+                    className="rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6"
                 >
                     <div className="grid gap-5 sm:grid-cols-2">
                         <label className="block">
@@ -359,26 +359,26 @@ export default function RoomDrawAdminPage() {
                     <button
                         type="submit"
                         disabled={controlsDisabled}
-                        className="mt-6 rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                        className="mt-6 w-full rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60 sm:w-auto"
                     >
                         {saving ? 'Saving...' : 'Save Window'}
                     </button>
                 </form>
 
-                <div className="mt-6 rounded-md border border-sas-line bg-sas-white p-6 shadow-sm">
-                    <h2 className="font-display text-2xl font-semibold text-sas-black">
+                <div className="mt-6 rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6">
+                    <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
                         Status Controls
                     </h2>
                     <p className="mt-2 text-sm text-sas-black/65">
                         Reset room draw statuses without changing reviews or
                         room data.
                     </p>
-                    <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                    <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                         <button
                             type="button"
                             onClick={clearStatuses}
                             disabled={controlsDisabled}
-                            className="rounded-md border border-sas-green px-4 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                            className="w-full rounded-md border border-sas-green px-4 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
                         >
                             {clearing ? 'Clearing...' : 'Clear All Statuses'}
                         </button>
@@ -386,7 +386,7 @@ export default function RoomDrawAdminPage() {
                             type="button"
                             onClick={endRoomDraw}
                             disabled={controlsDisabled}
-                            className="rounded-md border border-sas-line px-4 py-2 font-medium text-sas-black hover:border-sas-green hover:text-sas-green disabled:opacity-60"
+                            className="w-full rounded-md border border-sas-line px-4 py-2 font-medium text-sas-black hover:border-sas-green hover:text-sas-green disabled:opacity-60 sm:w-auto"
                         >
                             {ending ? 'Ending...' : 'End Period Only'}
                         </button>
@@ -394,7 +394,7 @@ export default function RoomDrawAdminPage() {
                             type="button"
                             onClick={closeRoomDraw}
                             disabled={controlsDisabled}
-                            className="rounded-md bg-sas-black px-4 py-2 font-medium text-sas-white hover:bg-sas-green disabled:opacity-60"
+                            className="w-full rounded-md bg-sas-black px-4 py-2 font-medium text-sas-white hover:bg-sas-green disabled:opacity-60 sm:w-auto"
                         >
                             {closing
                                 ? 'Closing...'

@@ -32,6 +32,27 @@ const toRoomForm = (room: Room): RoomForm => ({
     bathroom_type: room.bathroom_type ? String(room.bathroom_type) : '',
 });
 
+const ROOM_FIELDS = [
+    { key: 'room_number' as const, label: 'Room', type: 'text' as const },
+    {
+        key: 'housing_building_id' as const,
+        label: 'Building ID',
+        type: 'number' as const,
+    },
+    { key: 'size' as const, label: 'Size', type: 'number' as const },
+    {
+        key: 'occupancy_type' as const,
+        label: 'Occupancy',
+        type: 'number' as const,
+    },
+    { key: 'closet_type' as const, label: 'Closet', type: 'number' as const },
+    {
+        key: 'bathroom_type' as const,
+        label: 'Bathroom',
+        type: 'number' as const,
+    },
+] as const;
+
 export default function HousingDataAdminPage() {
     const { user, loading: authLoading } = useAuth();
     const [buildings, setBuildings] = useState<BuildingSearchDoc[]>([]);
@@ -341,6 +362,37 @@ export default function HousingDataAdminPage() {
         setEditingRoomId(null);
     };
 
+    const renderRoomActions = (room: Room, isEditingRoom: boolean) =>
+        isEditingRoom ? (
+            <div className="flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    onClick={() => cancelRoomEdit(room)}
+                    disabled={savingRoomId === room.id}
+                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    onClick={() => saveRoom(room.id)}
+                    disabled={savingRoomId === room.id}
+                    className="rounded-md bg-sas-green px-3 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                >
+                    {savingRoomId === room.id ? 'Saving...' : 'Save'}
+                </button>
+            </div>
+        ) : (
+            <button
+                type="button"
+                onClick={() => setEditingRoomId(room.id)}
+                disabled={savingRoomId !== null}
+                className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+            >
+                Edit
+            </button>
+        );
+
     if (authLoading || loading) {
         return <Loading />;
     }
@@ -355,7 +407,7 @@ export default function HousingDataAdminPage() {
                 <SiteHeader />
                 <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-center justify-center px-4">
                     <div className="w-full max-w-md rounded-md border border-sas-line bg-sas-white p-6 text-center shadow-sm">
-                        <h1 className="font-display text-3xl font-semibold text-sas-green">
+                        <h1 className="font-display text-2xl font-semibold text-sas-green sm:text-3xl">
                             Admin Access Required
                         </h1>
                         <p className="mt-3 text-sas-black/65">
@@ -381,7 +433,7 @@ export default function HousingDataAdminPage() {
                 <AdminTabs activeTab="housing-data" />
 
                 <div className="mb-8 border-b border-sas-line pb-5">
-                    <h1 className="font-display text-4xl font-semibold text-sas-black">
+                    <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">
                         Housing Data
                     </h1>
                     <p className="mt-2 text-sas-black/70">
@@ -414,7 +466,7 @@ export default function HousingDataAdminPage() {
                             {buildings.length} buildings
                         </p>
                     )}
-                    <div className="mt-2 flex gap-3 overflow-x-auto pb-3">
+                    <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         {filteredBuildings.map((building) => {
                             const isSelected =
                                 building.id === selectedBuildingId;
@@ -436,7 +488,7 @@ export default function HousingDataAdminPage() {
                                     key={building.id}
                                     type="button"
                                     onClick={() => selectBuilding(building.id)}
-                                    className={`min-w-[220px] rounded-md border p-4 text-left shadow-sm transition-colors ${
+                                    className={`w-full rounded-md border p-4 text-left shadow-sm transition-colors ${
                                         isSelected
                                             ? 'border-sas-green bg-sas-green text-sas-white'
                                             : 'border-sas-line bg-sas-white text-sas-black hover:border-sas-green'
@@ -502,9 +554,9 @@ export default function HousingDataAdminPage() {
                     <>
                         <form
                             onSubmit={saveBuilding}
-                            className="rounded-md border border-sas-line bg-sas-white p-6 shadow-sm"
+                            className="rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6"
                         >
-                            <h2 className="font-display text-2xl font-semibold text-sas-black">
+                            <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
                                 Building Details
                             </h2>
                             <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -576,21 +628,21 @@ export default function HousingDataAdminPage() {
                                     />
                                 </label>
                             </div>
-                            <div className="mt-5 flex flex-wrap gap-3">
+                            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                                 {editingBuilding ? (
                                     <>
                                         <button
                                             type="button"
                                             onClick={cancelBuildingEdit}
                                             disabled={savingBuilding}
-                                            className="rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                                            className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
                                         >
                                             Cancel
                                         </button>
                                         <button
                                             type="submit"
                                             disabled={savingBuilding}
-                                            className="rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                                            className="w-full rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60 sm:w-auto"
                                         >
                                             {savingBuilding
                                                 ? 'Saving...'
@@ -601,7 +653,7 @@ export default function HousingDataAdminPage() {
                                     <button
                                         type="button"
                                         onClick={() => setEditingBuilding(true)}
-                                        className="rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                                        className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white sm:w-auto"
                                     >
                                         Edit Building
                                     </button>
@@ -609,173 +661,204 @@ export default function HousingDataAdminPage() {
                             </div>
                         </form>
 
-                        <div className="mt-8 rounded-md border border-sas-line bg-sas-white p-6 shadow-sm">
-                            <h2 className="font-display text-2xl font-semibold text-sas-black">
+                        <div className="mt-8 rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6">
+                            <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
                                 Rooms
                             </h2>
                             {roomsLoading ? (
                                 <p className="mt-4 text-sas-black/65">
                                     Loading rooms...
                                 </p>
+                            ) : rooms.length === 0 ? (
+                                <p className="mt-4 text-sas-black/65">
+                                    No rooms found for this building.
+                                </p>
                             ) : (
-                                <div className="mt-5 overflow-x-auto">
-                                    <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-                                        <thead>
-                                            <tr className="border-b border-sas-line text-sas-black/65">
-                                                <th className="py-2 pr-3 font-medium">
-                                                    Room
-                                                </th>
-                                                <th className="py-2 pr-3 font-medium">
-                                                    Building ID
-                                                </th>
-                                                <th className="py-2 pr-3 font-medium">
-                                                    Size
-                                                </th>
-                                                <th className="py-2 pr-3 font-medium">
-                                                    Occupancy
-                                                </th>
-                                                <th className="py-2 pr-3 font-medium">
-                                                    Closet
-                                                </th>
-                                                <th className="py-2 pr-3 font-medium">
-                                                    Bathroom
-                                                </th>
-                                                <th className="py-2 pr-3 font-medium">
-                                                    Action
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rooms.map((room) => {
-                                                const roomForm =
-                                                    roomForms[room.id];
-                                                if (!roomForm) {
-                                                    return null;
-                                                }
-                                                const isEditingRoom =
-                                                    editingRoomId === room.id;
+                                <>
+                                    <div className="mt-5 space-y-4 md:hidden">
+                                        {rooms.map((room) => {
+                                            const roomForm = roomForms[room.id];
+                                            if (!roomForm) {
+                                                return null;
+                                            }
+                                            const isEditingRoom =
+                                                editingRoomId === room.id;
 
-                                                return (
-                                                    <tr
-                                                        key={room.id}
-                                                        className="border-b border-sas-line last:border-b-0"
-                                                    >
-                                                        {(
-                                                            [
-                                                                'room_number',
-                                                                'housing_building_id',
-                                                                'size',
-                                                                'occupancy_type',
-                                                                'closet_type',
-                                                                'bathroom_type',
-                                                            ] as const
-                                                        ).map((field) => (
-                                                            <td
-                                                                key={field}
-                                                                className="py-3 pr-3"
-                                                            >
-                                                                <input
-                                                                    type={
-                                                                        field ===
-                                                                        'room_number'
-                                                                            ? 'text'
-                                                                            : 'number'
+                                            return (
+                                                <div
+                                                    key={room.id}
+                                                    className="rounded-md border border-sas-line p-4"
+                                                >
+                                                    <p className="font-display text-lg font-semibold text-sas-black">
+                                                        Room{' '}
+                                                        {roomForm.room_number}
+                                                    </p>
+                                                    <div className="mt-3 grid gap-3">
+                                                        {ROOM_FIELDS.map(
+                                                            (field) => (
+                                                                <label
+                                                                    key={
+                                                                        field.key
                                                                     }
-                                                                    value={
-                                                                        roomForm[
-                                                                            field
-                                                                        ]
-                                                                    }
-                                                                    disabled={
-                                                                        !isEditingRoom
-                                                                    }
-                                                                    onChange={(
-                                                                        event
-                                                                    ) =>
-                                                                        setRoomForms(
-                                                                            (
-                                                                                current
-                                                                            ) => ({
-                                                                                ...current,
-                                                                                [room.id]:
-                                                                                    {
-                                                                                        ...current[
-                                                                                            room
-                                                                                                .id
-                                                                                        ],
-                                                                                        [field]:
-                                                                                            event
-                                                                                                .target
-                                                                                                .value,
-                                                                                    },
-                                                                            })
-                                                                        )
-                                                                    }
-                                                                    className="w-full min-w-24 rounded-md border border-sas-line px-2 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                                                />
-                                                            </td>
-                                                        ))}
-                                                        <td className="py-3 pr-3">
-                                                            {isEditingRoom ? (
-                                                                <div className="flex gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            cancelRoomEdit(
-                                                                                room
-                                                                            )
-                                                                        }
-                                                                        disabled={
-                                                                            savingRoomId ===
-                                                                            room.id
-                                                                        }
-                                                                        className="rounded-md border border-sas-green px-3 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
-                                                                    >
-                                                                        Cancel
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            saveRoom(
-                                                                                room.id
-                                                                            )
-                                                                        }
-                                                                        disabled={
-                                                                            savingRoomId ===
-                                                                            room.id
-                                                                        }
-                                                                        className="rounded-md bg-sas-green px-3 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
-                                                                    >
-                                                                        {savingRoomId ===
-                                                                        room.id
-                                                                            ? 'Saving...'
-                                                                            : 'Save'}
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setEditingRoomId(
-                                                                            room.id
-                                                                        )
-                                                                    }
-                                                                    disabled={
-                                                                        savingRoomId !==
-                                                                        null
-                                                                    }
-                                                                    className="rounded-md border border-sas-green px-3 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                                                                    className="block"
                                                                 >
-                                                                    Edit
-                                                                </button>
+                                                                    <span className="text-sm font-medium text-sas-black/75">
+                                                                        {
+                                                                            field.label
+                                                                        }
+                                                                    </span>
+                                                                    <input
+                                                                        type={
+                                                                            field.type
+                                                                        }
+                                                                        value={
+                                                                            roomForm[
+                                                                                field
+                                                                                    .key
+                                                                            ]
+                                                                        }
+                                                                        disabled={
+                                                                            !isEditingRoom
+                                                                        }
+                                                                        onChange={(
+                                                                            event
+                                                                        ) =>
+                                                                            setRoomForms(
+                                                                                (
+                                                                                    current
+                                                                                ) => ({
+                                                                                    ...current,
+                                                                                    [room.id]:
+                                                                                        {
+                                                                                            ...current[
+                                                                                                room
+                                                                                                    .id
+                                                                                            ],
+                                                                                            [field.key]:
+                                                                                                event
+                                                                                                    .target
+                                                                                                    .value,
+                                                                                        },
+                                                                                })
+                                                                            )
+                                                                        }
+                                                                        className="mt-1 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                                                    />
+                                                                </label>
+                                                            )
+                                                        )}
+                                                    </div>
+                                                    <div className="mt-4">
+                                                        {renderRoomActions(
+                                                            room,
+                                                            isEditingRoom
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="mt-5 hidden overflow-x-auto md:block">
+                                        <p className="mb-3 text-xs text-sas-black/50">
+                                            Scroll horizontally to see all
+                                            columns.
+                                        </p>
+                                        <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                                            <thead>
+                                                <tr className="border-b border-sas-line text-sas-black/65">
+                                                    {ROOM_FIELDS.map(
+                                                        (field) => (
+                                                            <th
+                                                                key={field.key}
+                                                                className="py-2 pr-3 font-medium"
+                                                            >
+                                                                {field.label}
+                                                            </th>
+                                                        )
+                                                    )}
+                                                    <th className="py-2 pr-3 font-medium">
+                                                        Action
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {rooms.map((room) => {
+                                                    const roomForm =
+                                                        roomForms[room.id];
+                                                    if (!roomForm) {
+                                                        return null;
+                                                    }
+                                                    const isEditingRoom =
+                                                        editingRoomId ===
+                                                        room.id;
+
+                                                    return (
+                                                        <tr
+                                                            key={room.id}
+                                                            className="border-b border-sas-line last:border-b-0"
+                                                        >
+                                                            {ROOM_FIELDS.map(
+                                                                (field) => (
+                                                                    <td
+                                                                        key={
+                                                                            field.key
+                                                                        }
+                                                                        className="py-3 pr-3"
+                                                                    >
+                                                                        <input
+                                                                            type={
+                                                                                field.type
+                                                                            }
+                                                                            value={
+                                                                                roomForm[
+                                                                                    field
+                                                                                        .key
+                                                                                ]
+                                                                            }
+                                                                            disabled={
+                                                                                !isEditingRoom
+                                                                            }
+                                                                            onChange={(
+                                                                                event
+                                                                            ) =>
+                                                                                setRoomForms(
+                                                                                    (
+                                                                                        current
+                                                                                    ) => ({
+                                                                                        ...current,
+                                                                                        [room.id]:
+                                                                                            {
+                                                                                                ...current[
+                                                                                                    room
+                                                                                                        .id
+                                                                                                ],
+                                                                                                [field.key]:
+                                                                                                    event
+                                                                                                        .target
+                                                                                                        .value,
+                                                                                            },
+                                                                                    })
+                                                                                )
+                                                                            }
+                                                                            className="w-full min-w-24 rounded-md border border-sas-line px-2 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                                                        />
+                                                                    </td>
+                                                                )
                                                             )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                            <td className="py-3 pr-3">
+                                                                {renderRoomActions(
+                                                                    room,
+                                                                    isEditingRoom
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </>
