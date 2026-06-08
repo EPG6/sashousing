@@ -61,6 +61,14 @@ export const RoomCard = ({
               timeStyle: 'short',
           })
         : null;
+    const roomDrawCardClasses = canReportRoomDraw
+        ? isTaken
+            ? 'border-red-300 bg-red-50/70'
+            : 'border-sas-green bg-sas-green/5'
+        : 'border-sas-line bg-sas-white';
+    const roomDrawBadgeClasses = isTaken
+        ? 'border-red-200 bg-red-100 text-red-800'
+        : 'border-sas-green/30 bg-sas-green text-sas-white';
 
     const changeRoomDrawStatus = async (nextStatus: 'taken' | 'not_taken') => {
         if (!onRoomDrawStatusChange) {
@@ -82,11 +90,22 @@ export const RoomCard = ({
     };
 
     return (
-        <div className="w-full rounded-md border border-sas-line bg-sas-white p-4 shadow-sm transition-shadow hover:border-sas-green hover:shadow-md">
+        <div
+            className={`w-full rounded-md border p-4 shadow-sm transition-shadow hover:border-sas-green hover:shadow-md ${roomDrawCardClasses}`}
+        >
             <div className="mb-6">
-                <h2 className="font-display text-xl font-semibold text-sas-black">
-                    Room {room.room_number}
-                </h2>
+                <div className="flex items-start justify-between gap-3">
+                    <h2 className="font-display text-xl font-semibold text-sas-black">
+                        Room {room.room_number}
+                    </h2>
+                    {canReportRoomDraw && (
+                        <span
+                            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${roomDrawBadgeClasses}`}
+                        >
+                            {isTaken ? 'Taken' : 'Not Taken'}
+                        </span>
+                    )}
+                </div>
                 <p className="text-sm text-sas-black/55">{buildingName}</p>
             </div>
 
@@ -124,19 +143,13 @@ export const RoomCard = ({
             </div>
 
             {canReportRoomDraw && (
-                <div className="mb-5 rounded-md border border-sas-line bg-sas-mist p-3">
+                <div className="mb-5 rounded-md border border-sas-line bg-sas-white p-3">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <p className="text-sm font-medium text-sas-black">
                                 Room Draw Status
                             </p>
-                            <p
-                                className={`text-sm ${
-                                    isTaken
-                                        ? 'text-red-700'
-                                        : 'text-sas-green'
-                                }`}
-                            >
+                            <p className="text-sm text-sas-black/65">
                                 {isTaken ? 'Taken' : 'Not Taken'}
                             </p>
                         </div>
