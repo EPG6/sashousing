@@ -2,26 +2,34 @@
 
 import Loading from '@/components/Loading';
 import SiteHeader from '@/components/SiteHeader';
-import { RoomCard } from '@/components/housing/Rooms';
+import { RoomCard, getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
-import { Building, Room } from '@/types';
+import { Building, Room, RoomDrawStatusResponse } from '@/types';
 import { backendUrl } from '@/utils/api';
 import Image from 'next/image';
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+
+type RoomDrawStatusFilter = 'all' | 'not_taken' | 'taken';
 
 export default function DynamicRooms() {
     const params = useParams();
     const { id } = params; // Pass building id as a parameter in the URL
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialRoomSearchQuery = searchParams.get('roomSearch') || '';
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [buildingNotFound, setBuildingNotFound] = useState(false);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [building, setBuilding] = useState<Building | null>(null);
+    const [roomDrawVisible, setRoomDrawVisible] = useState(false);
     const [safeName, setSafeName] = useState<string>('');
     const { user, loading: authLoading } = useAuth();
     const [showFloorPlans, setShowFloorPlans] = useState(false);
+    const [roomSearchQuery, setRoomSearchQuery] = useState('');
+    const [roomDrawStatusFilter, setRoomDrawStatusFilter] =
+        useState<RoomDrawStatusFilter>('all');
 
     useEffect(() => {
         const fetchRooms = async () => {
@@ -44,6 +52,10 @@ export default function DynamicRooms() {
                         `${backendUrl}/api/campus/housing/${buildingId}/rooms`,
                         { credentials: 'include' }
                     ),
+                    fetch(
+                        `${backendUrl}/api/campus/housing/${buildingId}/room-draw/statuses`,
+                        { credentials: 'include' }
+                    ),
                 ];
 
                 if (!authLoading && user) {
@@ -55,7 +67,12 @@ export default function DynamicRooms() {
                     );
                 }
 
-                const [buildingResponse, roomsResponse, ratingsResponse] =
+                const [
+                    buildingResponse,
+                    roomsResponse,
+                    roomDrawResponse,
+                    ratingsResponse,
+                ] =
                     await Promise.all(requests);
 
                 if (!buildingResponse.ok) {
@@ -74,12 +91,18 @@ export default function DynamicRooms() {
                     setError('Failed to load rooms. Please try again later.');
                 }
 
-                const [buildingData, roomsData, ratingsMap] = await Promise.all(
-                    [
+                const [buildingData, roomsData, roomDrawData, ratingsMap] =
+                    await Promise.all([
                         buildingResponse.json(),
                         roomsResponse.ok
                             ? roomsResponse.json()
                             : ([] as Room[]),
+                        roomDrawResponse?.ok
+                            ? roomDrawResponse.json()
+                            : ({
+                                  isVisible: false,
+                                  statuses: {},
+                              } as RoomDrawStatusResponse),
                         ratingsResponse?.ok
                             ? ratingsResponse.json()
                             : ({} as Record<
@@ -89,8 +112,7 @@ export default function DynamicRooms() {
                                       reviewCount: number;
                                   }
                               >),
-                    ]
-                );
+                    ]);
 
                 setBuilding(buildingData);
                 setSafeName(
@@ -100,11 +122,13 @@ export default function DynamicRooms() {
                         .replace(/-+/g, '-')
                 );
 
+                setRoomDrawVisible(roomDrawData.isVisible);
                 setRooms(
                     roomsData.map((room: Room) => ({
                         ...room,
                         averageRating: ratingsMap[room.id]?.overallAverage || 0,
                         reviewCount: ratingsMap[room.id]?.reviewCount || 0,
+                        roomDrawStatus: roomDrawData.statuses[room.id],
                     }))
                 );
             } catch (error) {
@@ -117,6 +141,120 @@ export default function DynamicRooms() {
 
         fetchRooms();
     }, [id, user, authLoading]);
+
+    useEffect(() => {
+        setRoomSearchQuery(initialRoomSearchQuery);
+    }, [initialRoomSearchQuery]);
+
+    const updateRoomDrawStatus = async (
+        roomId: number,
+        nextStatus: 'taken' | 'not_taken'
+    ) => {
+        const response = await fetch(
+            `${backendUrl}/api/campus/housing/room-draw/rooms/${roomId}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ status: nextStatus }),
+            }
+        );
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => null);
+            throw new Error(data?.message || 'Failed to update room status');
+        }
+
+        const data = await response.json();
+        setRooms((currentRooms) =>
+            currentRooms.map((currentRoom) =>
+                currentRoom.id === roomId
+                    ? {
+                          ...currentRoom,
+                          roomDrawStatus:
+                              data.status === 'taken'
+                                  ? {
+                                        status: 'taken',
+                                        isOwner: data.isOwner,
+                                        updatedAt: data.updatedAt,
+                                        markedByName: data.markedByName,
+                                        markedByEmail: data.markedByEmail,
+                                    }
+                                  : undefined,
+                      }
+                    : currentRoom
+            )
+        );
+    };
+
+    const displayedRooms = useMemo(() => {
+        const normalizedQuery = roomSearchQuery.trim().toLowerCase();
+
+        const filtered = rooms.filter((room) => {
+            const isRoomTaken = room.roomDrawStatus?.status === 'taken';
+            if (
+                roomDrawVisible &&
+                roomDrawStatusFilter === 'taken' &&
+                !isRoomTaken
+            ) {
+                return false;
+            }
+            if (
+                roomDrawVisible &&
+                roomDrawStatusFilter === 'not_taken' &&
+                isRoomTaken
+            ) {
+                return false;
+            }
+
+            if (!normalizedQuery) {
+                return true;
+            }
+
+            const roomDrawStatus = isRoomTaken ? 'taken' : 'not taken';
+            const ratingStatus =
+                room.reviewCount && room.reviewCount > 0
+                    ? `${room.averageRating?.toFixed(1) || ''} rating ${
+                          room.reviewCount
+                      } reviews`
+                    : 'no ratings';
+
+            return [
+                room.room_number,
+                getRoomOccupancyType(room.occupancy_type),
+                room.size ? `${room.size} sq ft` : '',
+                roomDrawStatus,
+                ratingStatus,
+            ]
+                .join(' ')
+                .toLowerCase()
+                .includes(normalizedQuery);
+        });
+
+        if (!roomDrawVisible) {
+            return filtered;
+        }
+
+        return [...filtered].sort((a, b) => {
+            const aTaken = a.roomDrawStatus?.status === 'taken';
+            const bTaken = b.roomDrawStatus?.status === 'taken';
+
+            if (aTaken === bTaken) {
+                return a.room_number.localeCompare(b.room_number, undefined, {
+                    numeric: true,
+                });
+            }
+
+            return aTaken ? 1 : -1;
+        });
+    }, [rooms, roomSearchQuery, roomDrawStatusFilter, roomDrawVisible]);
+
+    const takenRoomCount = rooms.filter(
+        (room) => room.roomDrawStatus?.status === 'taken'
+    ).length;
+    const notTakenRoomCount = rooms.length - takenRoomCount;
 
     if (loading) {
         return <Loading />;
@@ -180,6 +318,18 @@ export default function DynamicRooms() {
                     {building.description}
                 </p>
 
+                {roomDrawVisible && (
+                    <div className="mb-6 rounded-md border border-sas-green bg-sas-green/10 p-4">
+                        <p className="font-medium text-sas-black">
+                            Room draw reporting is active.
+                        </p>
+                        <p className="mt-1 text-sm text-sas-black/70">
+                            Not Taken rooms are shown first. Use the status
+                            filters to quickly scan availability.
+                        </p>
+                    </div>
+                )}
+
                 {/* Button to toggle floor plans */}
                 <button
                     onClick={() => setShowFloorPlans(!showFloorPlans)}
@@ -241,16 +391,81 @@ export default function DynamicRooms() {
                     </p>
                 </div>
 
-                {rooms.length > 0 ? (
+                <div className="mb-6 max-w-xl">
+                    <label htmlFor="room-search" className="sr-only">
+                        Search rooms
+                    </label>
+                    <input
+                        id="room-search"
+                        type="search"
+                        value={roomSearchQuery}
+                        onChange={(event) =>
+                            setRoomSearchQuery(event.target.value)
+                        }
+                        placeholder="Search rooms by number, type, size, or status"
+                        className="w-full rounded-md border border-sas-line bg-sas-white px-4 py-3 text-sas-black shadow-sm focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                    {roomSearchQuery.trim() && (
+                        <p className="mt-2 text-sm text-sas-black/55">
+                            Showing {displayedRooms.length} of {rooms.length}{' '}
+                            rooms
+                        </p>
+                    )}
+                </div>
+
+                {roomDrawVisible && (
+                    <div className="mb-6 flex flex-wrap gap-2">
+                        {(
+                            [
+                                ['all', `All (${rooms.length})`],
+                                [
+                                    'not_taken',
+                                    `Not Taken (${notTakenRoomCount})`,
+                                ],
+                                ['taken', `Taken (${takenRoomCount})`],
+                            ] as const
+                        ).map(([filter, label]) => {
+                            const isActive = roomDrawStatusFilter === filter;
+
+                            return (
+                                <button
+                                    key={filter}
+                                    type="button"
+                                    onClick={() =>
+                                        setRoomDrawStatusFilter(filter)
+                                    }
+                                    className={`rounded-md px-4 py-2 text-sm font-medium ${
+                                        isActive
+                                            ? 'bg-sas-green text-sas-white'
+                                            : 'border border-sas-line bg-sas-white text-sas-black hover:border-sas-green hover:text-sas-green'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {rooms.length > 0 && displayedRooms.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {rooms.map((room) => (
+                        {displayedRooms.map((room) => (
                             <RoomCard
                                 key={room.id}
                                 buildingName={building.name}
                                 room={room}
                                 canViewReviews={!!user}
+                                canReportRoomDraw={roomDrawVisible}
+                                canOverrideRoomDraw={!!user?.isAdmin}
+                                onRoomDrawStatusChange={updateRoomDrawStatus}
                             />
                         ))}
+                    </div>
+                ) : rooms.length > 0 ? (
+                    <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">
+                        <p className="text-lg text-sas-black/75">
+                            No rooms match your search.
+                        </p>
                     </div>
                 ) : (
                     <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">

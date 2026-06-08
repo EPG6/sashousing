@@ -1,6 +1,7 @@
 'use client';
 import { RoomCardProps } from '@/types';
 import Link from 'next/link';
+import { useState } from 'react';
 
 export const StarRating = ({ rating }: { rating: number }) => {
     const totalStars = 5;
@@ -42,13 +43,69 @@ export const RoomCard = ({
     buildingName,
     room,
     canViewReviews = true,
+    canReportRoomDraw = false,
+    canOverrideRoomDraw = false,
+    onRoomDrawStatusChange,
 }: RoomCardProps) => {
+    const [updatingStatus, setUpdatingStatus] = useState(false);
+    const isTaken = room.roomDrawStatus?.status === 'taken';
+    const canChangeTakenStatus =
+        !isTaken || room.roomDrawStatus?.isOwner || canOverrideRoomDraw;
+    const markedBy =
+        room.roomDrawStatus?.markedByName ||
+        room.roomDrawStatus?.markedByEmail ||
+        'Unknown';
+    const markedAt = room.roomDrawStatus?.updatedAt
+        ? new Date(room.roomDrawStatus.updatedAt).toLocaleString(undefined, {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+          })
+        : null;
+    const roomDrawCardClasses = canReportRoomDraw
+        ? isTaken
+            ? 'border-red-300 bg-red-50/70'
+            : 'border-sas-green bg-sas-green/5'
+        : 'border-sas-line bg-sas-white';
+    const roomDrawBadgeClasses = isTaken
+        ? 'border-red-200 bg-red-100 text-red-800'
+        : 'border-sas-green/30 bg-sas-green text-sas-white';
+
+    const changeRoomDrawStatus = async (nextStatus: 'taken' | 'not_taken') => {
+        if (!onRoomDrawStatusChange) {
+            return;
+        }
+
+        try {
+            setUpdatingStatus(true);
+            await onRoomDrawStatusChange(room.id, nextStatus);
+        } catch (error) {
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to update room status'
+            );
+        } finally {
+            setUpdatingStatus(false);
+        }
+    };
+
     return (
-        <div className="w-full rounded-md border border-sas-line bg-sas-white p-4 shadow-sm transition-shadow hover:border-sas-green hover:shadow-md">
+        <div
+            className={`w-full rounded-md border p-4 shadow-sm transition-shadow hover:border-sas-green hover:shadow-md ${roomDrawCardClasses}`}
+        >
             <div className="mb-6">
-                <h2 className="font-display text-xl font-semibold text-sas-black">
-                    Room {room.room_number}
-                </h2>
+                <div className="flex items-start justify-between gap-3">
+                    <h2 className="font-display text-xl font-semibold text-sas-black">
+                        Room {room.room_number}
+                    </h2>
+                    {canReportRoomDraw && (
+                        <span
+                            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${roomDrawBadgeClasses}`}
+                        >
+                            {isTaken ? 'Taken' : 'Not Taken'}
+                        </span>
+                    )}
+                </div>
                 <p className="text-sm text-sas-black/55">{buildingName}</p>
             </div>
 
@@ -84,6 +141,69 @@ export const RoomCard = ({
                     </p>
                 )}
             </div>
+
+            {canReportRoomDraw && (
+                <div className="mb-5 rounded-md border border-sas-line bg-sas-white p-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-sm font-medium text-sas-black">
+                                Room Draw Status
+                            </p>
+                            <p className="text-sm text-sas-black/65">
+                                {isTaken ? 'Taken' : 'Not Taken'}
+                            </p>
+                        </div>
+                        {canViewReviews ? (
+                            isTaken ? (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        changeRoomDrawStatus('not_taken')
+                                    }
+                                    disabled={
+                                        updatingStatus || !canChangeTakenStatus
+                                    }
+                                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:cursor-not-allowed disabled:border-sas-line disabled:text-sas-black/35 disabled:hover:bg-transparent"
+                                >
+                                    {updatingStatus
+                                        ? 'Updating...'
+                                        : canChangeTakenStatus
+                                          ? 'Mark Not Taken'
+                                          : 'Taken'}
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        changeRoomDrawStatus('taken')
+                                    }
+                                    disabled={updatingStatus}
+                                    className="rounded-md bg-sas-green px-3 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                                >
+                                    {updatingStatus
+                                        ? 'Updating...'
+                                        : 'Mark Taken'}
+                                </button>
+                            )
+                        ) : (
+                            <span className="text-xs text-sas-black/50">
+                                Sign in to report
+                            </span>
+                        )}
+                    </div>
+                    {canOverrideRoomDraw && isTaken && (
+                        <div className="mt-3 border-t border-sas-line pt-3 text-xs text-sas-black/60">
+                            <p>Marked by {markedBy}</p>
+                            {markedAt && <p>Marked {markedAt}</p>}
+                        </div>
+                    )}
+                    {!canOverrideRoomDraw && isTaken && markedAt && (
+                        <div className="mt-3 border-t border-sas-line pt-3 text-xs text-sas-black/60">
+                            <p>Updated {markedAt}</p>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <Link
                 href={`/campus/housing/${room.housing_building_id}/${room.room_number}`}
