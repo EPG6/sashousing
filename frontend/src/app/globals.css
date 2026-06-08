@@ -16,6 +16,7 @@ body {
         'ITC Franklin Gothic Lt', 'Helvetica Now Condensed', 'Arial Narrow',
         Arial, sans-serif;
     letter-spacing: 0;
+    overflow-x: clip;
 }
 
 button,

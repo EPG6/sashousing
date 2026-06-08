@@ -98,7 +98,7 @@ export default function LoginRequired() {
                     priority
                     className="mb-4 h-16 w-16 object-contain"
                 />
-                <h1 className="mb-2 font-display text-3xl font-semibold">
+                <h1 className="mb-2 font-display text-2xl font-semibold sm:text-3xl">
                     Sign in to review housing and see room status.
                 </h1>
                 <p className="mb-5 text-sm text-sas-black/65">

@@ -304,7 +304,7 @@ export default function DynamicRooms() {
                     Back
                 </button>
 
-                <h1 className="mb-4 font-display text-4xl font-semibold text-sas-black">
+                <h1 className="mb-4 font-display text-2xl font-semibold text-sas-black sm:text-4xl">
                     {building.name}
                 </h1>
                 <Image
@@ -341,7 +341,7 @@ export default function DynamicRooms() {
                 {/* Conditionally render floor plans */}
                 {showFloorPlans && (
                     <div className="mb-8">
-                        <h2 className="mb-4 font-display text-2xl font-semibold text-sas-green">
+                        <h2 className="mb-4 font-display text-xl font-semibold text-sas-green sm:text-2xl">
                             Floor Plans
                         </h2>
                         <div className="grid gap-6 pb-6 grid-cols-1 sm:grid-cols-2">
@@ -382,7 +382,7 @@ export default function DynamicRooms() {
                 )}
 
                 <div className="mb-8">
-                    <h1 className="font-display text-3xl font-semibold text-sas-black">
+                    <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-3xl">
                         Rooms in {building.name}
                     </h1>
                     <p className="mt-2 text-sas-black/65">

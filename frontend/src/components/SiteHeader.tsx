@@ -69,10 +69,10 @@ export default function SiteHeader() {
 
     return (
         <header className="border-b border-sas-line bg-sas-white">
-            <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
                 <Link
                     href="/campus/housing"
-                    className="flex items-center gap-3 text-sas-black"
+                    className="flex min-w-0 items-center gap-2 text-sas-black sm:gap-3"
                 >
                     <Image
                         src="/logos/saslogo.png"
@@ -80,13 +80,13 @@ export default function SiteHeader() {
                         width={56}
                         height={54}
                         priority
-                        className="h-12 w-12 object-contain"
+                        className="h-10 w-10 shrink-0 object-contain sm:h-12 sm:w-12"
                     />
-                    <span className="font-display text-2xl font-semibold leading-none">
+                    <span className="truncate font-display text-lg font-semibold leading-none sm:text-2xl">
                         Housing Platform
                     </span>
                 </Link>
-                <div className="flex items-center gap-4">
+                <div className="flex shrink-0 items-center gap-2 sm:gap-4">
                     <span className="hidden text-sm uppercase text-sas-green sm:inline">
                         Scripps Associated Students
                     </span>
@@ -106,7 +106,16 @@ export default function SiteHeader() {
                                 disabled={loggingOut}
                                 className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
                             >
-                                {loggingOut ? 'Signing out...' : 'Sign out'}
+                                {loggingOut ? (
+                                    '...'
+                                ) : (
+                                    <>
+                                        <span className="sm:hidden">Out</span>
+                                        <span className="hidden sm:inline">
+                                            Sign out
+                                        </span>
+                                    </>
+                                )}
                             </button>
                         ) : (
                             <button
@@ -122,9 +131,16 @@ export default function SiteHeader() {
                                     height={18}
                                     className="h-[18px] w-[18px]"
                                 />
-                                {loggingIn
-                                    ? 'Signing in...'
-                                    : 'Google Sign In'}
+                                {loggingIn ? (
+                                    '...'
+                                ) : (
+                                    <>
+                                        <span className="sm:hidden">Sign in</span>
+                                        <span className="hidden sm:inline">
+                                            Google Sign In
+                                        </span>
+                                    </>
+                                )}
                             </button>
                         ))}
                 </div>

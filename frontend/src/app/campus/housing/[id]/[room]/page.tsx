@@ -157,7 +157,9 @@ const RoomPage = () => {
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
             <SiteHeader />
-            <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+            <div
+                className={`mx-auto max-w-6xl px-4 py-8 sm:px-6 ${!isCreatingNew && !selectedReview ? 'pb-24' : ''}`}
+            >
                 {/* Back Button */}
                 <button
                     onClick={() => router.back()}
@@ -168,7 +170,7 @@ const RoomPage = () => {
 
                 <div className="mb-8">
                     <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <h1 className="font-display text-3xl font-semibold text-sas-black">
+                        <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-3xl">
                             Reviews for {buildingName} {room}
                         </h1>
                         <button
@@ -303,8 +305,8 @@ const RoomPage = () => {
                                             key={review._id}
                                             className="border-b border-sas-line pb-4"
                                         >
-                                            <div className="flex justify-between mb-2">
-                                                <div className="flex items-center rounded-md bg-sas-white p-3">
+                                            <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div className="flex flex-wrap items-center rounded-md bg-sas-white p-3">
                                                     <span className="text-m mr-2 text-sas-black/65">
                                                         Overall Rating:
                                                     </span>
@@ -323,7 +325,7 @@ const RoomPage = () => {
                                                 </div>
 
                                                 {review.isOwner && (
-                                                    <div className="flex p-2 gap-4">
+                                                    <div className="flex shrink-0 gap-2 p-2 sm:gap-4">
                                                         <button
                                                             className="text-m rounded-md bg-sas-green px-4 py-2 text-sas-white hover:bg-sas-black"
                                                             onClick={() => {
@@ -402,7 +404,7 @@ const RoomPage = () => {
 
                                             {/* Review Pictures */}
                                             {review.pictures && (
-                                                <div className="pictures-container flex space-x-4">
+                                                <div className="flex gap-3 overflow-x-auto pb-2">
                                                     {review.pictures &&
                                                         review.pictures.length >
                                                             0 &&
@@ -411,9 +413,15 @@ const RoomPage = () => {
                                                                 picture,
                                                                 index
                                                             ) => (
-                                                                <div
+                                                                <button
                                                                     key={index}
-                                                                    className="picture-item"
+                                                                    type="button"
+                                                                    className="shrink-0"
+                                                                    onClick={() =>
+                                                                        setSelectedPicture(
+                                                                            picture
+                                                                        )
+                                                                    }
                                                                 >
                                                                     <Image
                                                                         src={`${backendUrl}/api/campus/housing/review_pictures/${picture}`}
@@ -424,19 +432,9 @@ const RoomPage = () => {
                                                                         height={
                                                                             200
                                                                         }
-                                                                        className="object-cover"
-                                                                        onClick={() =>
-                                                                            setSelectedPicture(
-                                                                                picture
-                                                                            )
-                                                                        } // Open modal when image is clicked
-                                                                        style={{
-                                                                            height: '200px',
-                                                                            objectFit:
-                                                                                'cover',
-                                                                        }}
+                                                                        className="h-24 w-24 rounded-md object-cover sm:h-[200px] sm:w-[200px]"
                                                                     />
-                                                                </div>
+                                                                </button>
                                                             )
                                                         )}
                                                 </div>
@@ -454,14 +452,14 @@ const RoomPage = () => {
                                             )}
 
                                             {/* Date written, last updated */}
-                                            <div className="flex space-x-16">
-                                                <p className="mt-3 text-sas-black/55">
+                                            <div className="mt-3 flex flex-col gap-1 text-sm text-sas-black/55 sm:flex-row sm:gap-8">
+                                                <p>
                                                     Review written{' '}
                                                     {formatDate(
                                                         review.createdAt
                                                     )}
                                                 </p>
-                                                <p className="mt-3 text-sas-black/55">
+                                                <p>
                                                     Last updated{' '}
                                                     {formatDate(
                                                         review.updatedAt
@@ -496,7 +494,7 @@ const RoomPage = () => {
                 <button
                     type="button"
                     onClick={() => handleAddNewReviewClick(true)}
-                    className="fixed bottom-4 left-4 right-4 z-30 rounded-md bg-sas-green px-5 py-3 font-medium text-sas-white shadow-lg transition-colors hover:bg-sas-black focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2 sm:bottom-6 sm:left-auto sm:right-6"
+                    className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-30 rounded-md bg-sas-green px-5 py-3 font-medium text-sas-white shadow-lg transition-colors hover:bg-sas-black focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2 sm:bottom-6 sm:left-auto sm:right-6"
                 >
                     Add Review
                 </button>

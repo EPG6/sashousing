@@ -315,21 +315,17 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
                     className="w-full rounded-md border border-sas-line p-2"
                 />
 
-                <div className="flex">
+                <div className="mt-2 flex gap-3 overflow-x-auto pb-2">
                     {pictureURLs &&
                         pictureURLs.length > 0 &&
                         pictureURLs.map((pictureURL, index) => (
-                            <div key={index} className="picture-item">
+                            <div key={index} className="shrink-0">
                                 <Image
                                     src={pictureURL}
                                     alt={`Review image ${index + 1}`}
                                     width={200}
                                     height={200}
-                                    className="object-cover"
-                                    style={{
-                                        height: '200px',
-                                        objectFit: 'cover',
-                                    }}
+                                    className="h-24 w-24 rounded-md object-cover sm:h-[200px] sm:w-[200px]"
                                 />
                             </div>
                         ))}
@@ -363,8 +359,9 @@ export const PictureModal = ({
             className="fixed bottom-0 left-0 right-0 top-0 z-50 flex items-center justify-center bg-sas-black bg-opacity-40"
             onClick={onClose}
         >
-            <div className="relative max-h-screen max-w-4xl overflow-auto rounded-md bg-sas-white p-4">
+            <div className="relative mx-4 max-h-[90vh] w-full max-w-[calc(100vw-2rem)] overflow-auto rounded-md bg-sas-white p-4 sm:mx-0 sm:max-w-4xl">
                 <button
+                    type="button"
                     onClick={onClose}
                     className="absolute right-2 top-2 text-3xl font-bold text-sas-black/60 hover:text-sas-green"
                 >
@@ -375,7 +372,7 @@ export const PictureModal = ({
                     width={800}
                     height={800}
                     alt="Review picture"
-                    className="object-contain"
+                    className="h-auto max-h-[85vh] w-full object-contain"
                 />
             </div>
         </div>

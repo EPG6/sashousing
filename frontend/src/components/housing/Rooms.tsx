@@ -144,7 +144,7 @@ export const RoomCard = ({
 
             {canReportRoomDraw && (
                 <div className="mb-5 rounded-md border border-sas-line bg-sas-white p-3">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <p className="text-sm font-medium text-sas-black">
                                 Room Draw Status
