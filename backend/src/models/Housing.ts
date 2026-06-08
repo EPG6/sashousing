@@ -148,4 +148,91 @@ const HousingReviews =
     mongoose.models.HousingReviews ||
     mongoose.model<IHousingReviews>('HousingReviews', HousingReviewsSchema);
 
-export { HousingBuildings, HousingRooms, HousingReviews };
+interface IRoomDrawSettings extends Document {
+    key: string;
+    startsAt?: Date;
+    endsAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const RoomDrawSettingsSchema = new Schema<IRoomDrawSettings>(
+    {
+        key: {
+            type: String,
+            required: true,
+            unique: true,
+            default: 'global',
+        },
+        startsAt: {
+            type: Date,
+        },
+        endsAt: {
+            type: Date,
+        },
+    },
+    {
+        timestamps: true,
+    }
+);
+
+const RoomDrawSettings =
+    (mongoose.models.RoomDrawSettings as mongoose.Model<IRoomDrawSettings>) ||
+    mongoose.model<IRoomDrawSettings>(
+        'RoomDrawSettings',
+        RoomDrawSettingsSchema
+    );
+
+interface IRoomDrawStatus extends Document {
+    housing_room_id: number;
+    status: 'taken';
+    markedByEmail: string;
+    markedByName?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const RoomDrawStatusSchema = new Schema<IRoomDrawStatus>(
+    {
+        housing_room_id: {
+            type: Number,
+            required: true,
+            unique: true,
+            ref: 'HousingRooms',
+            index: true,
+        },
+        status: {
+            type: String,
+            enum: ['taken'],
+            default: 'taken',
+            required: true,
+        },
+        markedByEmail: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true,
+        },
+        markedByName: {
+            type: String,
+        },
+    },
+    {
+        timestamps: true,
+    }
+);
+
+const RoomDrawStatuses =
+    (mongoose.models.RoomDrawStatuses as mongoose.Model<IRoomDrawStatus>) ||
+    mongoose.model<IRoomDrawStatus>(
+        'RoomDrawStatuses',
+        RoomDrawStatusSchema
+    );
+
+export {
+    HousingBuildings,
+    HousingRooms,
+    HousingReviews,
+    RoomDrawSettings,
+    RoomDrawStatuses,
+};

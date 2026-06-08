@@ -4,7 +4,7 @@ import Loading from '@/components/Loading';
 import SiteHeader from '@/components/SiteHeader';
 import { RoomCard } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
-import { Building, Room } from '@/types';
+import { Building, Room, RoomDrawStatusResponse } from '@/types';
 import { backendUrl } from '@/utils/api';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
@@ -19,6 +19,7 @@ export default function DynamicRooms() {
     const [buildingNotFound, setBuildingNotFound] = useState(false);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [building, setBuilding] = useState<Building | null>(null);
+    const [roomDrawVisible, setRoomDrawVisible] = useState(false);
     const [safeName, setSafeName] = useState<string>('');
     const { user, loading: authLoading } = useAuth();
     const [showFloorPlans, setShowFloorPlans] = useState(false);
@@ -44,6 +45,10 @@ export default function DynamicRooms() {
                         `${backendUrl}/api/campus/housing/${buildingId}/rooms`,
                         { credentials: 'include' }
                     ),
+                    fetch(
+                        `${backendUrl}/api/campus/housing/${buildingId}/room-draw/statuses`,
+                        { credentials: 'include' }
+                    ),
                 ];
 
                 if (!authLoading && user) {
@@ -55,7 +60,12 @@ export default function DynamicRooms() {
                     );
                 }
 
-                const [buildingResponse, roomsResponse, ratingsResponse] =
+                const [
+                    buildingResponse,
+                    roomsResponse,
+                    roomDrawResponse,
+                    ratingsResponse,
+                ] =
                     await Promise.all(requests);
 
                 if (!buildingResponse.ok) {
@@ -74,12 +84,18 @@ export default function DynamicRooms() {
                     setError('Failed to load rooms. Please try again later.');
                 }
 
-                const [buildingData, roomsData, ratingsMap] = await Promise.all(
-                    [
+                const [buildingData, roomsData, roomDrawData, ratingsMap] =
+                    await Promise.all([
                         buildingResponse.json(),
                         roomsResponse.ok
                             ? roomsResponse.json()
                             : ([] as Room[]),
+                        roomDrawResponse?.ok
+                            ? roomDrawResponse.json()
+                            : ({
+                                  isVisible: false,
+                                  statuses: {},
+                              } as RoomDrawStatusResponse),
                         ratingsResponse?.ok
                             ? ratingsResponse.json()
                             : ({} as Record<
@@ -89,8 +105,7 @@ export default function DynamicRooms() {
                                       reviewCount: number;
                                   }
                               >),
-                    ]
-                );
+                    ]);
 
                 setBuilding(buildingData);
                 setSafeName(
@@ -100,11 +115,13 @@ export default function DynamicRooms() {
                         .replace(/-+/g, '-')
                 );
 
+                setRoomDrawVisible(roomDrawData.isVisible);
                 setRooms(
                     roomsData.map((room: Room) => ({
                         ...room,
                         averageRating: ratingsMap[room.id]?.overallAverage || 0,
                         reviewCount: ratingsMap[room.id]?.reviewCount || 0,
+                        roomDrawStatus: roomDrawData.statuses[room.id],
                     }))
                 );
             } catch (error) {
@@ -117,6 +134,47 @@ export default function DynamicRooms() {
 
         fetchRooms();
     }, [id, user, authLoading]);
+
+    const updateRoomDrawStatus = async (
+        roomId: number,
+        nextStatus: 'taken' | 'not_taken'
+    ) => {
+        const response = await fetch(
+            `${backendUrl}/api/campus/housing/room-draw/rooms/${roomId}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ status: nextStatus }),
+            }
+        );
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => null);
+            throw new Error(data?.message || 'Failed to update room status');
+        }
+
+        const data = await response.json();
+        setRooms((currentRooms) =>
+            currentRooms.map((currentRoom) =>
+                currentRoom.id === roomId
+                    ? {
+                          ...currentRoom,
+                          roomDrawStatus:
+                              data.status === 'taken'
+                                  ? {
+                                        status: 'taken',
+                                        isOwner: data.isOwner,
+                                        updatedAt: data.updatedAt,
+                                    }
+                                  : undefined,
+                      }
+                    : currentRoom
+            )
+        );
+    };
 
     if (loading) {
         return <Loading />;
@@ -249,6 +307,9 @@ export default function DynamicRooms() {
                                 buildingName={building.name}
                                 room={room}
                                 canViewReviews={!!user}
+                                canReportRoomDraw={roomDrawVisible}
+                                canOverrideRoomDraw={!!user?.isAdmin}
+                                onRoomDrawStatusChange={updateRoomDrawStatus}
                             />
                         ))}
                     </div>

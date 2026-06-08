@@ -25,6 +25,23 @@ export interface Room {
     housing_building_id: number;
     averageRating?: number;
     reviewCount?: number;
+    roomDrawStatus?: RoomDrawRoomStatus;
+}
+
+export interface RoomDrawSettings {
+    startsAt: string | null;
+    endsAt: string | null;
+    isVisible: boolean;
+}
+
+export interface RoomDrawRoomStatus {
+    status: 'taken';
+    isOwner: boolean;
+    updatedAt?: string;
+}
+
+export interface RoomDrawStatusResponse extends RoomDrawSettings {
+    statuses: Record<number, RoomDrawRoomStatus>;
 }
 
 export interface Review {
@@ -60,6 +77,12 @@ export interface RoomCardProps {
     buildingName: string;
     room: Room;
     canViewReviews?: boolean;
+    canReportRoomDraw?: boolean;
+    canOverrideRoomDraw?: boolean;
+    onRoomDrawStatusChange?: (
+        roomId: number,
+        nextStatus: 'taken' | 'not_taken'
+    ) => Promise<void>;
 }
 
 export interface ReviewFormProps {

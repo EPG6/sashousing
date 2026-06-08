@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import multer from 'multer';
 import {
+    isAdmin,
     isAuthenticated,
     isHousingReviewOwner,
 } from '../middleware/authMiddleware';
@@ -9,6 +10,8 @@ import {
     HousingBuildings,
     HousingReviews,
     HousingRooms,
+    RoomDrawSettings,
+    RoomDrawStatuses,
 } from '../models/Housing';
 import { getHousingReviewPictures } from '../db';
 
@@ -19,6 +22,32 @@ const upload = multer({ storage: storage });
 
 const getParam = (param: string | string[]): string =>
     Array.isArray(param) ? param[0] : param;
+
+const ROOM_DRAW_SETTINGS_KEY = 'global';
+
+const isRoomDrawVisible = (settings?: {
+    startsAt?: Date | null;
+    endsAt?: Date | null;
+} | null) => {
+    if (!settings?.startsAt || !settings?.endsAt) {
+        return false;
+    }
+
+    const now = new Date();
+    return settings.startsAt <= now && now <= settings.endsAt;
+};
+
+const getRoomDrawSettingsPayload = async () => {
+    const settings = await RoomDrawSettings.findOne({
+        key: ROOM_DRAW_SETTINGS_KEY,
+    }).lean();
+
+    return {
+        startsAt: settings?.startsAt || null,
+        endsAt: settings?.endsAt || null,
+        isVisible: isRoomDrawVisible(settings),
+    };
+};
 
 /**
  * @route   GET /api/campus/housing
@@ -33,6 +62,263 @@ router.get('/', async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+/**
+ * @route   GET /api/campus/housing/room-draw/settings
+ * @desc    Get room draw visibility settings
+ * @access  Public
+ */
+router.get('/room-draw/settings', async (_req: Request, res: Response) => {
+    try {
+        res.json(await getRoomDrawSettingsPayload());
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+/**
+ * @route   PATCH /api/campus/housing/room-draw/settings
+ * @desc    Update room draw visibility settings
+ * @access  Admin
+ */
+router.patch(
+    '/room-draw/settings',
+    isAdmin,
+    async (req: Request, res: Response) => {
+        try {
+            const { startsAt, endsAt } = req.body;
+
+            const parsedStartsAt = startsAt ? new Date(startsAt) : null;
+            const parsedEndsAt = endsAt ? new Date(endsAt) : null;
+
+            if (
+                (startsAt && Number.isNaN(parsedStartsAt?.getTime())) ||
+                (endsAt && Number.isNaN(parsedEndsAt?.getTime()))
+            ) {
+                res.status(400).json({ message: 'Invalid date format' });
+                return;
+            }
+
+            if (
+                parsedStartsAt &&
+                parsedEndsAt &&
+                parsedStartsAt >= parsedEndsAt
+            ) {
+                res.status(400).json({
+                    message: 'Start time must be before end time',
+                });
+                return;
+            }
+
+            await RoomDrawSettings.findOneAndUpdate(
+                { key: ROOM_DRAW_SETTINGS_KEY },
+                {
+                    key: ROOM_DRAW_SETTINGS_KEY,
+                    startsAt: parsedStartsAt,
+                    endsAt: parsedEndsAt,
+                },
+                {
+                    new: true,
+                    upsert: true,
+                    setDefaultsOnInsert: true,
+                }
+            );
+
+            res.json(await getRoomDrawSettingsPayload());
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   GET /api/campus/housing/:building/room-draw/statuses
+ * @desc    Get active room draw statuses for a building
+ * @access  Public
+ */
+router.get(
+    '/:building/room-draw/statuses',
+    async (req: Request, res: Response) => {
+        try {
+            const buildingId = parseInt(getParam(req.params.building), 10);
+
+            if (isNaN(buildingId)) {
+                res.status(400).json({ message: 'Invalid building ID format' });
+                return;
+            }
+
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.json({ ...settings, statuses: {} });
+                return;
+            }
+
+            const rooms = await HousingRooms.find({
+                housing_building_id: buildingId,
+            }).lean();
+            const roomIds = rooms.map((room) => room.id);
+            const statuses = await RoomDrawStatuses.find({
+                housing_room_id: { $in: roomIds },
+            }).lean();
+            const sessionEmail = req.session.user?.email;
+
+            const statusMap = statuses.reduce<
+                Record<
+                    number,
+                    {
+                        status: 'taken';
+                        isOwner: boolean;
+                        updatedAt?: Date;
+                    }
+                >
+            >((acc, status) => {
+                acc[status.housing_room_id] = {
+                    status: 'taken',
+                    isOwner: status.markedByEmail === sessionEmail,
+                    updatedAt: status.updatedAt,
+                };
+                return acc;
+            }, {});
+
+            res.json({ ...settings, statuses: statusMap });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   PATCH /api/campus/housing/room-draw/rooms/:roomId
+ * @desc    Mark a room taken or not taken during room draw
+ * @access  isAuthenticated
+ */
+router.patch(
+    '/room-draw/rooms/:roomId',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room draw reporting is not active',
+                });
+                return;
+            }
+
+            const roomId = parseInt(getParam(req.params.roomId), 10);
+            if (isNaN(roomId)) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            const room = await HousingRooms.findOne({ id: roomId });
+            if (!room) {
+                res.status(404).json({ message: 'Room not found' });
+                return;
+            }
+
+            const requestedStatus = String(req.body.status || '');
+            if (!['taken', 'not_taken', 'available'].includes(requestedStatus)) {
+                res.status(400).json({
+                    message: 'Status must be taken or not_taken',
+                });
+                return;
+            }
+
+            const sessionUser = req.session.user!;
+            const existingStatus = await RoomDrawStatuses.findOne({
+                housing_room_id: roomId,
+            });
+
+            if (
+                existingStatus &&
+                existingStatus.markedByEmail !== sessionUser.email &&
+                !sessionUser.isAdmin
+            ) {
+                res.status(403).json({
+                    message: 'Only the user who marked this room taken can change it',
+                });
+                return;
+            }
+
+            if (
+                requestedStatus === 'not_taken' ||
+                requestedStatus === 'available'
+            ) {
+                await RoomDrawStatuses.deleteOne({ housing_room_id: roomId });
+                res.json({
+                    roomId,
+                    status: 'not_taken',
+                    isOwner: false,
+                    ...settings,
+                });
+                return;
+            }
+
+            let updatedStatus;
+            if (existingStatus) {
+                updatedStatus = await RoomDrawStatuses.findOneAndUpdate(
+                    sessionUser.isAdmin
+                        ? { housing_room_id: roomId }
+                        : {
+                              housing_room_id: roomId,
+                              markedByEmail: sessionUser.email,
+                          },
+                    {
+                        status: 'taken',
+                        markedByEmail: sessionUser.email,
+                        markedByName:
+                            `${sessionUser.firstName} ${sessionUser.lastName}`.trim(),
+                    },
+                    {
+                        new: true,
+                    }
+                );
+            } else {
+                try {
+                    updatedStatus = await RoomDrawStatuses.create({
+                        housing_room_id: roomId,
+                        status: 'taken',
+                        markedByEmail: sessionUser.email,
+                        markedByName:
+                            `${sessionUser.firstName} ${sessionUser.lastName}`.trim(),
+                    });
+                } catch (error) {
+                    if (
+                        typeof error === 'object' &&
+                        error !== null &&
+                        'code' in error &&
+                        error.code === 11000
+                    ) {
+                        res.status(403).json({
+                            message: 'This room was already marked taken by another user',
+                        });
+                        return;
+                    }
+
+                    throw error;
+                }
+            }
+
+            if (!updatedStatus) {
+                res.status(403).json({
+                    message: 'Only the user who marked this room taken can change it',
+                });
+                return;
+            }
+
+            res.json({
+                roomId,
+                status: updatedStatus.status,
+                isOwner: true,
+                updatedAt: updatedStatus.updatedAt,
+                ...settings,
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
 
 /**
  * @route   GET /api/campus/housing/:building

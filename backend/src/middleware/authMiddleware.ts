@@ -14,6 +14,20 @@ export const isAuthenticated = (
     next();
 };
 
+export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session.user) {
+        res.status(401).json({ message: 'Authentication required' });
+        return;
+    }
+
+    if (!req.session.user.isAdmin) {
+        res.status(403).json({ message: 'Admin access required' });
+        return;
+    }
+
+    next();
+};
+
 export const isHousingReviewOwner = async (
     req: Request,
     res: Response,
