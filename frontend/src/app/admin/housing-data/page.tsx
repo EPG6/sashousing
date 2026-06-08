@@ -35,6 +35,7 @@ const toRoomForm = (room: Room): RoomForm => ({
 export default function HousingDataAdminPage() {
     const { user, loading: authLoading } = useAuth();
     const [buildings, setBuildings] = useState<BuildingSearchDoc[]>([]);
+    const [buildingSearchQuery, setBuildingSearchQuery] = useState('');
     const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(
         null
     );
@@ -59,6 +60,34 @@ export default function HousingDataAdminPage() {
             null,
         [buildings, selectedBuildingId]
     );
+
+    const filteredBuildings = useMemo(() => {
+        const normalizedQuery = buildingSearchQuery.trim().toLowerCase();
+
+        if (!normalizedQuery) {
+            return buildings;
+        }
+
+        return buildings.filter((building) => {
+            const searchText = [
+                building.campus,
+                building.name,
+                building.description,
+                `${building.floors} floors`,
+                ...building.roomNumbers.map(
+                    (roomNumber) => `room ${roomNumber}`
+                ),
+            ]
+                .join(' ')
+                .toLowerCase();
+
+            return searchText.includes(normalizedQuery);
+        });
+    }, [buildings, buildingSearchQuery]);
+
+    const normalizedBuildingSearchQuery = buildingSearchQuery
+        .trim()
+        .toLowerCase();
 
     useEffect(() => {
         const fetchBuildings = async () => {
@@ -89,6 +118,21 @@ export default function HousingDataAdminPage() {
 
         fetchBuildings();
     }, []);
+
+    useEffect(() => {
+        if (filteredBuildings.length === 0) {
+            return;
+        }
+
+        if (
+            selectedBuildingId &&
+            filteredBuildings.some((building) => building.id === selectedBuildingId)
+        ) {
+            return;
+        }
+
+        setSelectedBuildingId(filteredBuildings[0].id);
+    }, [filteredBuildings, selectedBuildingId]);
 
     useEffect(() => {
         if (!selectedBuilding) {
@@ -296,10 +340,43 @@ export default function HousingDataAdminPage() {
                     <p className="text-sm font-medium text-sas-black/75">
                         Buildings
                     </p>
+                    <div className="mt-2 max-w-xl">
+                        <label htmlFor="admin-building-search" className="sr-only">
+                            Search buildings
+                        </label>
+                        <input
+                            id="admin-building-search"
+                            type="search"
+                            value={buildingSearchQuery}
+                            onChange={(event) =>
+                                setBuildingSearchQuery(event.target.value)
+                            }
+                            placeholder="Search buildings, rooms, campuses, or descriptions"
+                            className="w-full rounded-md border border-sas-line bg-sas-white px-4 py-3 text-sas-black shadow-sm focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                        />
+                    </div>
+                    {buildingSearchQuery.trim() && (
+                        <p className="mt-2 text-sm text-sas-black/55">
+                            Showing {filteredBuildings.length} of{' '}
+                            {buildings.length} buildings
+                        </p>
+                    )}
                     <div className="mt-2 flex gap-3 overflow-x-auto pb-3">
-                        {buildings.map((building) => {
+                        {filteredBuildings.map((building) => {
                             const isSelected =
                                 building.id === selectedBuildingId;
+                            const matchingRooms =
+                                normalizedBuildingSearchQuery
+                                    ? building.roomNumbers
+                                          .filter((roomNumber) =>
+                                              roomNumber
+                                                  .toLowerCase()
+                                                  .includes(
+                                                      normalizedBuildingSearchQuery
+                                                  )
+                                          )
+                                          .slice(0, 5)
+                                    : [];
 
                             return (
                                 <button
@@ -340,10 +417,29 @@ export default function HousingDataAdminPage() {
                                             ? ''
                                             : 's'}
                                     </span>
+                                    {matchingRooms.length > 0 && (
+                                        <span
+                                            className={`mt-3 block text-sm ${
+                                                isSelected
+                                                    ? 'text-sas-white'
+                                                    : 'text-sas-green'
+                                            }`}
+                                        >
+                                            Matching rooms:{' '}
+                                            {matchingRooms.join(', ')}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
                     </div>
+                    {filteredBuildings.length === 0 && (
+                        <div className="mt-2 rounded-md border border-sas-line bg-sas-white p-6 text-center">
+                            <p className="text-sas-black/65">
+                                No buildings match your search.
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {message && (
