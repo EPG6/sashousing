@@ -2,13 +2,13 @@
 
 import Loading from '@/components/Loading';
 import SiteHeader from '@/components/SiteHeader';
-import { RoomCard } from '@/components/housing/Rooms';
+import { RoomCard, getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
 import { Building, Room, RoomDrawStatusResponse } from '@/types';
 import { backendUrl } from '@/utils/api';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export default function DynamicRooms() {
     const params = useParams();
@@ -23,6 +23,7 @@ export default function DynamicRooms() {
     const [safeName, setSafeName] = useState<string>('');
     const { user, loading: authLoading } = useAuth();
     const [showFloorPlans, setShowFloorPlans] = useState(false);
+    const [roomSearchQuery, setRoomSearchQuery] = useState('');
 
     useEffect(() => {
         const fetchRooms = async () => {
@@ -178,6 +179,37 @@ export default function DynamicRooms() {
         );
     };
 
+    const filteredRooms = useMemo(() => {
+        const normalizedQuery = roomSearchQuery.trim().toLowerCase();
+
+        if (!normalizedQuery) {
+            return rooms;
+        }
+
+        return rooms.filter((room) => {
+            const roomDrawStatus = room.roomDrawStatus
+                ? 'taken'
+                : 'not taken';
+            const ratingStatus =
+                room.reviewCount && room.reviewCount > 0
+                    ? `${room.averageRating?.toFixed(1) || ''} rating ${
+                          room.reviewCount
+                      } reviews`
+                    : 'no ratings';
+
+            return [
+                room.room_number,
+                getRoomOccupancyType(room.occupancy_type),
+                room.size ? `${room.size} sq ft` : '',
+                roomDrawStatus,
+                ratingStatus,
+            ]
+                .join(' ')
+                .toLowerCase()
+                .includes(normalizedQuery);
+        });
+    }, [rooms, roomSearchQuery]);
+
     if (loading) {
         return <Loading />;
     }
@@ -301,9 +333,31 @@ export default function DynamicRooms() {
                     </p>
                 </div>
 
-                {rooms.length > 0 ? (
+                <div className="mb-6 max-w-xl">
+                    <label htmlFor="room-search" className="sr-only">
+                        Search rooms
+                    </label>
+                    <input
+                        id="room-search"
+                        type="search"
+                        value={roomSearchQuery}
+                        onChange={(event) =>
+                            setRoomSearchQuery(event.target.value)
+                        }
+                        placeholder="Search rooms by number, type, size, or status"
+                        className="w-full rounded-md border border-sas-line bg-sas-white px-4 py-3 text-sas-black shadow-sm focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                    {roomSearchQuery.trim() && (
+                        <p className="mt-2 text-sm text-sas-black/55">
+                            Showing {filteredRooms.length} of {rooms.length}{' '}
+                            rooms
+                        </p>
+                    )}
+                </div>
+
+                {rooms.length > 0 && filteredRooms.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {rooms.map((room) => (
+                        {filteredRooms.map((room) => (
                             <RoomCard
                                 key={room.id}
                                 buildingName={building.name}
@@ -314,6 +368,12 @@ export default function DynamicRooms() {
                                 onRoomDrawStatusChange={updateRoomDrawStatus}
                             />
                         ))}
+                    </div>
+                ) : rooms.length > 0 ? (
+                    <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">
+                        <p className="text-lg text-sas-black/75">
+                            No rooms match your search.
+                        </p>
                     </div>
                 ) : (
                     <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">

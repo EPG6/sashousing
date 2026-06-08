@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Loading from '@/components/Loading';
 import { backendUrl } from '@/utils/api';
 import SiteHeader from '@/components/SiteHeader';
@@ -13,6 +13,7 @@ type BuildingDoc = {
     campus: string;
     description: string;
     floors: number;
+    roomNumbers: string[];
 };
 
 type BuildingCard = {
@@ -21,6 +22,7 @@ type BuildingCard = {
     image: string;
     description: string;
     floors: number;
+    roomNumbers: string[];
 };
 
 type CampusGroup = {
@@ -30,6 +32,7 @@ type CampusGroup = {
 
 const HousingPage = () => {
     const [housingData, setHousingData] = useState<CampusGroup[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +40,7 @@ const HousingPage = () => {
         const fetchHousingData = async () => {
             try {
                 const response = await fetch(
-                    `${backendUrl}/api/campus/housing`,
+                    `${backendUrl}/api/campus/housing/search-index`,
                     {
                         credentials: 'include',
                     }
@@ -66,6 +69,7 @@ const HousingPage = () => {
                                 .replace(/-+/g, '-')}.jpg`,
                             description: building.description,
                             floors: building.floors,
+                            roomNumbers: building.roomNumbers || [],
                         };
 
                         const existingCampus = acc.find(
@@ -99,6 +103,35 @@ const HousingPage = () => {
         fetchHousingData();
     }, []);
 
+    const filteredHousingData = useMemo(() => {
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+
+        if (!normalizedQuery) {
+            return housingData;
+        }
+
+        return housingData
+            .map((campus) => ({
+                ...campus,
+                buildings: campus.buildings.filter((building) => {
+                    const searchText = [
+                        campus.campus,
+                        building.name,
+                        building.description,
+                        `${building.floors} floors`,
+                        ...building.roomNumbers.map(
+                            (roomNumber) => `room ${roomNumber}`
+                        ),
+                    ]
+                        .join(' ')
+                        .toLowerCase();
+
+                    return searchText.includes(normalizedQuery);
+                }),
+            }))
+            .filter((campus) => campus.buildings.length > 0);
+    }, [housingData, searchQuery]);
+
     if (loading) {
         return <Loading />;
     }
@@ -127,7 +160,22 @@ const HousingPage = () => {
                         community.
                     </p>
                 </div>
-                {housingData.map((campus, index) => (
+
+                <div className="mb-8 max-w-xl">
+                    <label htmlFor="housing-search" className="sr-only">
+                        Search buildings
+                    </label>
+                    <input
+                        id="housing-search"
+                        type="search"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder="Search buildings, rooms, campuses, or descriptions"
+                        className="w-full rounded-md border border-sas-line bg-sas-white px-4 py-3 text-sas-black shadow-sm focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                </div>
+
+                {filteredHousingData.map((campus, index) => (
                     <section key={index} className="mb-12">
                         <h2 className="mb-6 border-b border-sas-line pb-2 font-display text-3xl font-semibold text-sas-green">
                             {campus.campus}
@@ -157,6 +205,33 @@ const HousingPage = () => {
                                             )}
                                             ...
                                         </p>
+                                        {searchQuery.trim() &&
+                                            building.roomNumbers.some(
+                                                (roomNumber) =>
+                                                    roomNumber
+                                                        .toLowerCase()
+                                                        .includes(
+                                                            searchQuery
+                                                                .trim()
+                                                                .toLowerCase()
+                                                        )
+                                            ) && (
+                                                <p className="mt-3 text-sm text-sas-green">
+                                                    Matching rooms:{' '}
+                                                    {building.roomNumbers
+                                                        .filter((roomNumber) =>
+                                                            roomNumber
+                                                                .toLowerCase()
+                                                                .includes(
+                                                                    searchQuery
+                                                                        .trim()
+                                                                        .toLowerCase()
+                                                                )
+                                                        )
+                                                        .slice(0, 5)
+                                                        .join(', ')}
+                                                </p>
+                                            )}
                                         <span className="mt-4 inline-block font-medium text-sas-green hover:underline">
                                             View Details
                                         </span>
@@ -166,6 +241,13 @@ const HousingPage = () => {
                         </div>
                     </section>
                 ))}
+                {filteredHousingData.length === 0 && (
+                    <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">
+                        <p className="text-lg text-sas-black/75">
+                            No buildings match your search.
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

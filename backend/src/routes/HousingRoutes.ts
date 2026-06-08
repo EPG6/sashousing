@@ -84,6 +84,43 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 /**
+ * @route   GET /api/campus/housing/search-index
+ * @desc    Get buildings with room numbers for search
+ * @access  Public
+ */
+router.get('/search-index', async (_req: Request, res: Response) => {
+    try {
+        const [buildings, rooms] = await Promise.all([
+            HousingBuildings.find({}).lean(),
+            HousingRooms.find({}, { housing_building_id: 1, room_number: 1 })
+                .sort({ room_number: 1 })
+                .lean(),
+        ]);
+
+        const roomNumbersByBuilding = rooms.reduce<Record<number, string[]>>(
+            (acc, room) => {
+                if (!acc[room.housing_building_id]) {
+                    acc[room.housing_building_id] = [];
+                }
+
+                acc[room.housing_building_id].push(room.room_number);
+                return acc;
+            },
+            {}
+        );
+
+        res.json(
+            buildings.map((building) => ({
+                ...building,
+                roomNumbers: roomNumbersByBuilding[building.id] || [],
+            }))
+        );
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+/**
  * @route   PATCH /api/campus/housing/admin/buildings/:buildingId
  * @desc    Update housing building data
  * @access  Admin
