@@ -176,9 +176,9 @@ export default function SiteHeader() {
                             <Link
                                 key={link.href}
                                 href={link.href}
-                                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-smooth ${
                                     isActive
-                                        ? 'bg-sas-green text-sas-white'
+                                        ? 'bg-sas-green text-sas-white shadow-sm'
                                         : 'text-sas-black hover:bg-sas-mist hover:text-sas-green'
                                 }`}
                             >
