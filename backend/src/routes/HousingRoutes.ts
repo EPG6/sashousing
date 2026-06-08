@@ -49,6 +49,9 @@ const getRoomDrawSettingsPayload = async () => {
     };
 };
 
+const getSessionUserName = (user: Express.Request['session']['user']) =>
+    user ? `${user.firstName} ${user.lastName}`.trim() : '';
+
 /**
  * @route   GET /api/campus/housing
  * @desc    Get all housing buildings
@@ -132,6 +135,101 @@ router.patch(
 );
 
 /**
+ * @route   POST /api/campus/housing/room-draw/clear-statuses
+ * @desc    Clear all room draw statuses
+ * @access  Admin
+ */
+router.post(
+    '/room-draw/clear-statuses',
+    isAdmin,
+    async (_req: Request, res: Response) => {
+        try {
+            const result = await RoomDrawStatuses.deleteMany({});
+            res.json({
+                message: 'Room draw statuses cleared',
+                deletedCount: result.deletedCount,
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   POST /api/campus/housing/room-draw/end
+ * @desc    End room draw without clearing room draw statuses
+ * @access  Admin
+ */
+router.post(
+    '/room-draw/end',
+    isAdmin,
+    async (_req: Request, res: Response) => {
+        try {
+            const now = new Date();
+
+            await RoomDrawSettings.findOneAndUpdate(
+                { key: ROOM_DRAW_SETTINGS_KEY },
+                {
+                    key: ROOM_DRAW_SETTINGS_KEY,
+                    startsAt: null,
+                    endsAt: now,
+                },
+                {
+                    new: true,
+                    upsert: true,
+                    setDefaultsOnInsert: true,
+                }
+            );
+
+            res.json({
+                ...(await getRoomDrawSettingsPayload()),
+                message: 'Room draw ended',
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   POST /api/campus/housing/room-draw/close
+ * @desc    Close room draw and clear all room draw statuses
+ * @access  Admin
+ */
+router.post(
+    '/room-draw/close',
+    isAdmin,
+    async (_req: Request, res: Response) => {
+        try {
+            const now = new Date();
+
+            await RoomDrawSettings.findOneAndUpdate(
+                { key: ROOM_DRAW_SETTINGS_KEY },
+                {
+                    key: ROOM_DRAW_SETTINGS_KEY,
+                    startsAt: null,
+                    endsAt: now,
+                },
+                {
+                    new: true,
+                    upsert: true,
+                    setDefaultsOnInsert: true,
+                }
+            );
+
+            const result = await RoomDrawStatuses.deleteMany({});
+            res.json({
+                ...(await getRoomDrawSettingsPayload()),
+                message: 'Room draw closed and statuses cleared',
+                deletedCount: result.deletedCount,
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
  * @route   GET /api/campus/housing/:building/room-draw/statuses
  * @desc    Get active room draw statuses for a building
  * @access  Public
@@ -161,6 +259,7 @@ router.get(
                 housing_room_id: { $in: roomIds },
             }).lean();
             const sessionEmail = req.session.user?.email;
+            const isSessionAdmin = Boolean(req.session.user?.isAdmin);
 
             const statusMap = statuses.reduce<
                 Record<
@@ -169,6 +268,8 @@ router.get(
                         status: 'taken';
                         isOwner: boolean;
                         updatedAt?: Date;
+                        markedByName?: string;
+                        markedByEmail?: string;
                     }
                 >
             >((acc, status) => {
@@ -177,6 +278,14 @@ router.get(
                     isOwner: status.markedByEmail === sessionEmail,
                     updatedAt: status.updatedAt,
                 };
+
+                if (isSessionAdmin) {
+                    acc[status.housing_room_id].markedByName =
+                        status.markedByName;
+                    acc[status.housing_room_id].markedByEmail =
+                        status.markedByEmail;
+                }
+
                 return acc;
             }, {});
 
@@ -267,8 +376,7 @@ router.patch(
                     {
                         status: 'taken',
                         markedByEmail: sessionUser.email,
-                        markedByName:
-                            `${sessionUser.firstName} ${sessionUser.lastName}`.trim(),
+                        markedByName: getSessionUserName(sessionUser),
                     },
                     {
                         new: true,
@@ -280,8 +388,7 @@ router.patch(
                         housing_room_id: roomId,
                         status: 'taken',
                         markedByEmail: sessionUser.email,
-                        markedByName:
-                            `${sessionUser.firstName} ${sessionUser.lastName}`.trim(),
+                        markedByName: getSessionUserName(sessionUser),
                     });
                 } catch (error) {
                     if (
@@ -312,6 +419,12 @@ router.patch(
                 status: updatedStatus.status,
                 isOwner: true,
                 updatedAt: updatedStatus.updatedAt,
+                ...(sessionUser.isAdmin
+                    ? {
+                          markedByName: updatedStatus.markedByName,
+                          markedByEmail: updatedStatus.markedByEmail,
+                      }
+                    : {}),
                 ...settings,
             });
         } catch (error) {

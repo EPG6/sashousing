@@ -34,8 +34,13 @@ export default function RoomDrawAdminPage() {
     const [endsAt, setEndsAt] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [clearing, setClearing] = useState(false);
+    const [ending, setEnding] = useState(false);
+    const [closing, setClosing] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    const controlsDisabled = saving || clearing || ending || closing;
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -106,6 +111,140 @@ export default function RoomDrawAdminPage() {
             );
         } finally {
             setSaving(false);
+        }
+    };
+
+    const clearStatuses = async () => {
+        if (
+            !window.confirm(
+                'Clear every room draw status? This will make all rooms Not Taken.'
+            )
+        ) {
+            return;
+        }
+
+        setClearing(true);
+        setMessage(null);
+        setError(null);
+
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/room-draw/clear-statuses`,
+                {
+                    method: 'POST',
+                    credentials: 'include',
+                }
+            );
+
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(data?.message || 'Failed to clear statuses');
+            }
+
+            setMessage(
+                `Room draw statuses cleared. ${data.deletedCount || 0} status${
+                    data.deletedCount === 1 ? '' : 'es'
+                } removed.`
+            );
+        } catch (error) {
+            console.error('Room draw clear error:', error);
+            setError(
+                error instanceof Error
+                    ? error.message
+                    : 'Could not clear room draw statuses.'
+            );
+        } finally {
+            setClearing(false);
+        }
+    };
+
+    const closeRoomDraw = async () => {
+        if (
+            !window.confirm(
+                'Close room draw now and clear every room status? This cannot be undone.'
+            )
+        ) {
+            return;
+        }
+
+        setClosing(true);
+        setMessage(null);
+        setError(null);
+
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/room-draw/close`,
+                {
+                    method: 'POST',
+                    credentials: 'include',
+                }
+            );
+
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(data?.message || 'Failed to close room draw');
+            }
+
+            setSettings(data);
+            setStartsAt(toDateTimeLocalValue(data.startsAt));
+            setEndsAt(toDateTimeLocalValue(data.endsAt));
+            setMessage(
+                `Room draw closed. ${data.deletedCount || 0} status${
+                    data.deletedCount === 1 ? '' : 'es'
+                } removed.`
+            );
+        } catch (error) {
+            console.error('Room draw close error:', error);
+            setError(
+                error instanceof Error
+                    ? error.message
+                    : 'Could not close room draw.'
+            );
+        } finally {
+            setClosing(false);
+        }
+    };
+
+    const endRoomDraw = async () => {
+        if (
+            !window.confirm(
+                'End the room draw period now? Existing room statuses will be kept.'
+            )
+        ) {
+            return;
+        }
+
+        setEnding(true);
+        setMessage(null);
+        setError(null);
+
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/room-draw/end`,
+                {
+                    method: 'POST',
+                    credentials: 'include',
+                }
+            );
+
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(data?.message || 'Failed to end room draw');
+            }
+
+            setSettings(data);
+            setStartsAt(toDateTimeLocalValue(data.startsAt));
+            setEndsAt(toDateTimeLocalValue(data.endsAt));
+            setMessage('Room draw period ended. Existing statuses were kept.');
+        } catch (error) {
+            console.error('Room draw end error:', error);
+            setError(
+                error instanceof Error
+                    ? error.message
+                    : 'Could not end room draw.'
+            );
+        } finally {
+            setEnding(false);
         }
     };
 
@@ -216,12 +355,50 @@ export default function RoomDrawAdminPage() {
 
                     <button
                         type="submit"
-                        disabled={saving}
+                        disabled={controlsDisabled}
                         className="mt-6 rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
                     >
                         {saving ? 'Saving...' : 'Save Window'}
                     </button>
                 </form>
+
+                <div className="mt-6 rounded-md border border-sas-line bg-sas-white p-6 shadow-sm">
+                    <h2 className="font-display text-2xl font-semibold text-sas-black">
+                        Status Controls
+                    </h2>
+                    <p className="mt-2 text-sm text-sas-black/65">
+                        Reset room draw statuses without changing reviews or
+                        room data.
+                    </p>
+                    <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                        <button
+                            type="button"
+                            onClick={clearStatuses}
+                            disabled={controlsDisabled}
+                            className="rounded-md border border-sas-green px-4 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                        >
+                            {clearing ? 'Clearing...' : 'Clear All Statuses'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={endRoomDraw}
+                            disabled={controlsDisabled}
+                            className="rounded-md border border-sas-line px-4 py-2 font-medium text-sas-black hover:border-sas-green hover:text-sas-green disabled:opacity-60"
+                        >
+                            {ending ? 'Ending...' : 'End Period Only'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={closeRoomDraw}
+                            disabled={controlsDisabled}
+                            className="rounded-md bg-sas-black px-4 py-2 font-medium text-sas-white hover:bg-sas-green disabled:opacity-60"
+                        >
+                            {closing
+                                ? 'Closing...'
+                                : 'Close Room Draw and Clear'}
+                        </button>
+                    </div>
+                </div>
             </main>
         </div>
     );

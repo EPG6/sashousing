@@ -51,6 +51,16 @@ export const RoomCard = ({
     const isTaken = room.roomDrawStatus?.status === 'taken';
     const canChangeTakenStatus =
         !isTaken || room.roomDrawStatus?.isOwner || canOverrideRoomDraw;
+    const markedBy =
+        room.roomDrawStatus?.markedByName ||
+        room.roomDrawStatus?.markedByEmail ||
+        'Unknown';
+    const markedAt = room.roomDrawStatus?.updatedAt
+        ? new Date(room.roomDrawStatus.updatedAt).toLocaleString(undefined, {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+          })
+        : null;
 
     const changeRoomDrawStatus = async (nextStatus: 'taken' | 'not_taken') => {
         if (!onRoomDrawStatusChange) {
@@ -168,6 +178,12 @@ export const RoomCard = ({
                             </span>
                         )}
                     </div>
+                    {canOverrideRoomDraw && isTaken && (
+                        <div className="mt-3 border-t border-sas-line pt-3 text-xs text-sas-black/60">
+                            <p>Marked by {markedBy}</p>
+                            {markedAt && <p>Marked {markedAt}</p>}
+                        </div>
+                    )}
                 </div>
             )}
 

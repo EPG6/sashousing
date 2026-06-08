@@ -38,6 +38,8 @@ export interface RoomDrawRoomStatus {
     status: 'taken';
     isOwner: boolean;
     updatedAt?: string;
+    markedByName?: string;
+    markedByEmail?: string;
 }
 
 export interface RoomDrawStatusResponse extends RoomDrawSettings {

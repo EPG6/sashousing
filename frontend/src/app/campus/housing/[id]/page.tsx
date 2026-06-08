@@ -168,6 +168,8 @@ export default function DynamicRooms() {
                                         status: 'taken',
                                         isOwner: data.isOwner,
                                         updatedAt: data.updatedAt,
+                                        markedByName: data.markedByName,
+                                        markedByEmail: data.markedByEmail,
                                     }
                                   : undefined,
                       }
