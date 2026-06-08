@@ -11,8 +11,24 @@ import { signOut } from 'firebase/auth';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+
+const navLinks = [
+    { href: '/campus/housing', label: 'Rooms', shortLabel: 'Rooms' },
+    {
+        href: '/campus/housing/process',
+        label: 'Housing Process',
+        shortLabel: 'Process',
+    },
+    {
+        href: '/campus/housing/accommodation',
+        label: 'Accommodation',
+        shortLabel: 'Accommodation',
+    },
+] as const;
 
 export default function SiteHeader() {
+    const pathname = usePathname();
     const { user, loading } = useAuth();
     const [loggingIn, setLoggingIn] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
@@ -69,24 +85,25 @@ export default function SiteHeader() {
 
     return (
         <header className="border-b border-sas-line bg-sas-white">
-            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-                <Link
-                    href="/campus/housing"
-                    className="flex min-w-0 items-center gap-2 text-sas-black sm:gap-3"
-                >
-                    <Image
-                        src="/logos/saslogo.png"
-                        alt="SAS"
-                        width={56}
-                        height={54}
-                        priority
-                        className="h-10 w-10 shrink-0 object-contain sm:h-12 sm:w-12"
-                    />
-                    <span className="truncate font-display text-lg font-semibold leading-none sm:text-2xl">
-                        Housing Platform
-                    </span>
-                </Link>
-                <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Link
+                        href="/campus/housing"
+                        className="flex min-w-0 items-center gap-2 text-sas-black sm:gap-3"
+                    >
+                        <Image
+                            src="/logos/saslogo.png"
+                            alt="SAS"
+                            width={56}
+                            height={54}
+                            priority
+                            className="h-10 w-10 shrink-0 object-contain sm:h-12 sm:w-12"
+                        />
+                        <span className="truncate font-display text-lg font-semibold leading-none sm:text-2xl">
+                            Housing Platform
+                        </span>
+                    </Link>
+                    <div className="flex shrink-0 items-center gap-2 sm:gap-4">
                     <span className="hidden text-sm uppercase text-sas-green sm:inline">
                         Scripps Associated Students
                     </span>
@@ -143,7 +160,38 @@ export default function SiteHeader() {
                                 )}
                             </button>
                         ))}
+                    </div>
                 </div>
+                <nav
+                    aria-label="Main navigation"
+                    className="mt-3 flex flex-wrap gap-2 border-t border-sas-line pt-3"
+                >
+                    {navLinks.map((link) => {
+                        const isActive =
+                            pathname === link.href ||
+                            (link.href !== '/campus/housing' &&
+                                pathname.startsWith(link.href));
+
+                        return (
+                            <Link
+                                key={link.href}
+                                href={link.href}
+                                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                                    isActive
+                                        ? 'bg-sas-green text-sas-white'
+                                        : 'text-sas-black hover:bg-sas-mist hover:text-sas-green'
+                                }`}
+                            >
+                                <span className="sm:hidden">
+                                    {link.shortLabel}
+                                </span>
+                                <span className="hidden sm:inline">
+                                    {link.label}
+                                </span>
+                            </Link>
+                        );
+                    })}
+                </nav>
             </div>
         </header>
     );
