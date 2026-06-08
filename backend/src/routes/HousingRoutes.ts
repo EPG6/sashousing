@@ -52,6 +52,23 @@ const getRoomDrawSettingsPayload = async () => {
 const getSessionUserName = (user: Express.Request['session']['user']) =>
     user ? `${user.firstName} ${user.lastName}`.trim() : '';
 
+const parseRequiredNumber = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseOptionalNumber = (value: unknown) => {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (value === null || value === '') {
+        return null;
+    }
+
+    return parseRequiredNumber(value);
+};
+
 /**
  * @route   GET /api/campus/housing
  * @desc    Get all housing buildings
@@ -65,6 +82,207 @@ router.get('/', async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+/**
+ * @route   PATCH /api/campus/housing/admin/buildings/:buildingId
+ * @desc    Update housing building data
+ * @access  Admin
+ */
+router.patch(
+    '/admin/buildings/:buildingId',
+    isAdmin,
+    async (req: Request, res: Response) => {
+        try {
+            const buildingId = parseInt(getParam(req.params.buildingId), 10);
+            if (isNaN(buildingId)) {
+                res.status(400).json({ message: 'Invalid building ID format' });
+                return;
+            }
+
+            const updateData: Record<string, unknown> = {};
+            const { name, campus, floors, description } = req.body;
+
+            if (name !== undefined) {
+                const trimmedName = String(name).trim();
+                if (!trimmedName) {
+                    res.status(400).json({ message: 'Building name is required' });
+                    return;
+                }
+
+                updateData.name = trimmedName;
+            }
+
+            if (campus !== undefined) {
+                const trimmedCampus = String(campus).trim();
+                if (!trimmedCampus) {
+                    res.status(400).json({ message: 'Campus is required' });
+                    return;
+                }
+
+                updateData.campus = trimmedCampus;
+            }
+
+            if (floors !== undefined) {
+                const parsedFloors = parseRequiredNumber(floors);
+                if (
+                    parsedFloors === null ||
+                    !Number.isInteger(parsedFloors) ||
+                    parsedFloors < 1
+                ) {
+                    res.status(400).json({
+                        message: 'Floors must be a positive whole number',
+                    });
+                    return;
+                }
+
+                updateData.floors = parsedFloors;
+            }
+
+            if (description !== undefined) {
+                updateData.description = String(description).trim();
+            }
+
+            const updatedBuilding = await HousingBuildings.findOneAndUpdate(
+                { id: buildingId },
+                updateData,
+                {
+                    new: true,
+                    runValidators: true,
+                }
+            );
+
+            if (!updatedBuilding) {
+                res.status(404).json({ message: 'Building not found' });
+                return;
+            }
+
+            res.json(updatedBuilding);
+        } catch (error) {
+            if (
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                error.code === 11000
+            ) {
+                res.status(400).json({
+                    message: 'A building with that name already exists',
+                });
+                return;
+            }
+
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   PATCH /api/campus/housing/admin/rooms/:roomId
+ * @desc    Update housing room data
+ * @access  Admin
+ */
+router.patch(
+    '/admin/rooms/:roomId',
+    isAdmin,
+    async (req: Request, res: Response) => {
+        try {
+            const roomId = parseInt(getParam(req.params.roomId), 10);
+            if (isNaN(roomId)) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            const update = {
+                $set: {} as Record<string, unknown>,
+                $unset: {} as Record<string, ''>,
+            };
+            const {
+                room_number,
+                housing_building_id,
+                size,
+                occupancy_type,
+                closet_type,
+                bathroom_type,
+            } = req.body;
+
+            if (room_number !== undefined) {
+                const trimmedRoomNumber = String(room_number).trim();
+                if (!trimmedRoomNumber) {
+                    res.status(400).json({ message: 'Room number is required' });
+                    return;
+                }
+
+                update.$set.room_number = trimmedRoomNumber;
+            }
+
+            if (housing_building_id !== undefined) {
+                const parsedBuildingId = parseRequiredNumber(housing_building_id);
+                if (parsedBuildingId === null) {
+                    res.status(400).json({
+                        message: 'Building ID must be a number',
+                    });
+                    return;
+                }
+
+                const building = await HousingBuildings.findOne({
+                    id: parsedBuildingId,
+                });
+                if (!building) {
+                    res.status(404).json({ message: 'Building not found' });
+                    return;
+                }
+
+                update.$set.housing_building_id = parsedBuildingId;
+            }
+
+            const optionalNumberFields = {
+                size,
+                occupancy_type,
+                closet_type,
+                bathroom_type,
+            };
+
+            for (const [field, value] of Object.entries(optionalNumberFields)) {
+                const parsedValue = parseOptionalNumber(value);
+                if (parsedValue === undefined) {
+                    continue;
+                }
+
+                if (parsedValue === null) {
+                    update.$unset[field] = '';
+                    continue;
+                }
+
+                update.$set[field] = parsedValue;
+            }
+
+            const updatePayload: Record<string, unknown> = {};
+            if (Object.keys(update.$set).length > 0) {
+                updatePayload.$set = update.$set;
+            }
+            if (Object.keys(update.$unset).length > 0) {
+                updatePayload.$unset = update.$unset;
+            }
+
+            const updatedRoom = await HousingRooms.findOneAndUpdate(
+                { id: roomId },
+                updatePayload,
+                {
+                    new: true,
+                    runValidators: true,
+                }
+            );
+
+            if (!updatedRoom) {
+                res.status(404).json({ message: 'Room not found' });
+                return;
+            }
+
+            res.json(updatedRoom);
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
 
 /**
  * @route   GET /api/campus/housing/room-draw/settings
