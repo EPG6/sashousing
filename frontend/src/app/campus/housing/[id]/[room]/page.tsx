@@ -27,7 +27,7 @@ const RoomPage = () => {
     const [selectedPicture, setSelectedPicture] = useState<string | null>(null);
     const { user, loading: authLoading } = useAuth();
 
-    const handleAddNewReviewClick = () => {
+    const handleAddNewReviewClick = (shouldScrollToForm = false) => {
         if (isCreatingNew) {
             setIsCreatingNew(false);
         } else if (selectedReview) {
@@ -40,6 +40,10 @@ const RoomPage = () => {
             }
         } else {
             setIsCreatingNew(true);
+        }
+
+        if (shouldScrollToForm) {
+            scrollToReviewForm();
         }
     };
 
@@ -102,6 +106,12 @@ const RoomPage = () => {
         }, 0);
     };
 
+    const reviewActionLabel = selectedReview
+        ? 'Cancel review edit'
+        : isCreatingNew
+          ? 'Cancel new review'
+          : 'Add Review';
+
     if (loading || authLoading) {
         return <Loading />;
     }
@@ -157,9 +167,24 @@ const RoomPage = () => {
                 </button>
 
                 <div className="mb-8">
-                    <h1 className="font-display text-3xl font-semibold text-sas-black">
-                        Reviews for {buildingName} {room}
-                    </h1>
+                    <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <h1 className="font-display text-3xl font-semibold text-sas-black">
+                            Reviews for {buildingName} {room}
+                        </h1>
+                        <button
+                            className="w-fit rounded-md bg-sas-green px-6 py-2 font-medium text-sas-white transition-colors hover:bg-sas-black"
+                            onClick={() => handleAddNewReviewClick()}
+                            ref={targetRef}
+                        >
+                            {reviewActionLabel}
+                        </button>
+                    </div>
+
+                    {(isCreatingNew || selectedReview) && (
+                        <div className="mb-8">
+                            <ReviewForm review={selectedReview} />
+                        </div>
+                    )}
 
                     <div className="py-4 flex-grow">
                         {roomReviews &&
@@ -461,21 +486,21 @@ const RoomPage = () => {
 
                     <button
                         className="mb-6 mt-4 rounded-md border border-sas-green px-6 py-2 font-medium text-sas-green transition-colors hover:bg-sas-green hover:text-sas-white"
-                        onClick={handleAddNewReviewClick}
-                        ref={targetRef}
+                        onClick={() => handleAddNewReviewClick(true)}
                     >
-                        {selectedReview
-                            ? 'Cancel review edit'
-                            : 'Add new review'}
+                        {reviewActionLabel}
                     </button>
-
-                    {(isCreatingNew || selectedReview) && (
-                        <div>
-                            <ReviewForm review={selectedReview} />
-                        </div>
-                    )}
                 </div>
             </div>
+            {!isCreatingNew && !selectedReview && (
+                <button
+                    type="button"
+                    onClick={() => handleAddNewReviewClick(true)}
+                    className="fixed bottom-6 right-6 z-30 rounded-md bg-sas-green px-5 py-3 font-medium text-sas-white shadow-lg transition-colors hover:bg-sas-black focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2"
+                >
+                    Add Review
+                </button>
+            )}
         </div>
     );
 };
