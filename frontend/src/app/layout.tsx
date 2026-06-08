@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Analytics } from '@vercel/analytics/next';
+import SiteFooter from '@/components/SiteFooter';
 import './globals.css';
 
 export const viewport: Viewport = {
@@ -22,8 +23,9 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body>
+            <body className="flex min-h-screen flex-col">
                 {children}
+                <SiteFooter />
                 <Analytics />
             </body>
         </html>
