@@ -3,6 +3,7 @@
 import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
+import AdminTabs from '@/components/admin/AdminTabs';
 import { useAuth } from '@/hooks/useAuth';
 import { RoomDrawSettings } from '@/types';
 import { backendUrl } from '@/utils/api';
@@ -284,6 +285,8 @@ export default function RoomDrawAdminPage() {
                 >
                     Back to Housing
                 </Link>
+
+                <AdminTabs activeTab="room-draw" />
 
                 <div className="mb-8 border-b border-sas-line pb-5">
                     <h1 className="font-display text-4xl font-semibold text-sas-black">
