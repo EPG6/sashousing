@@ -197,6 +197,11 @@ export const RoomCard = ({
                             {markedAt && <p>Marked {markedAt}</p>}
                         </div>
                     )}
+                    {!canOverrideRoomDraw && isTaken && markedAt && (
+                        <div className="mt-3 border-t border-sas-line pt-3 text-xs text-sas-black/60">
+                            <p>Updated {markedAt}</p>
+                        </div>
+                    )}
                 </div>
             )}
 

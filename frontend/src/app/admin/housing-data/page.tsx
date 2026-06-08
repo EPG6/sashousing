@@ -91,6 +91,27 @@ export default function HousingDataAdminPage() {
         .trim()
         .toLowerCase();
 
+    const hasUnsavedEdits = editingBuilding || editingRoomId !== null;
+
+    const selectBuilding = (buildingId: number) => {
+        if (buildingId === selectedBuildingId) {
+            return;
+        }
+
+        if (
+            hasUnsavedEdits &&
+            !window.confirm(
+                'Switch buildings and discard unsaved edits?'
+            )
+        ) {
+            return;
+        }
+
+        setEditingBuilding(false);
+        setEditingRoomId(null);
+        setSelectedBuildingId(buildingId);
+    };
+
     useEffect(() => {
         const fetchBuildings = async () => {
             try {
@@ -126,6 +147,10 @@ export default function HousingDataAdminPage() {
             return;
         }
 
+        if (hasUnsavedEdits) {
+            return;
+        }
+
         if (
             selectedBuildingId &&
             filteredBuildings.some((building) => building.id === selectedBuildingId)
@@ -134,7 +159,7 @@ export default function HousingDataAdminPage() {
         }
 
         setSelectedBuildingId(filteredBuildings[0].id);
-    }, [filteredBuildings, selectedBuildingId]);
+    }, [filteredBuildings, hasUnsavedEdits, selectedBuildingId]);
 
     useEffect(() => {
         if (!selectedBuilding) {
@@ -410,11 +435,7 @@ export default function HousingDataAdminPage() {
                                 <button
                                     key={building.id}
                                     type="button"
-                                    onClick={() => {
-                                        setEditingBuilding(false);
-                                        setEditingRoomId(null);
-                                        setSelectedBuildingId(building.id);
-                                    }}
+                                    onClick={() => selectBuilding(building.id)}
                                     className={`min-w-[220px] rounded-md border p-4 text-left shadow-sm transition-colors ${
                                         isSelected
                                             ? 'border-sas-green bg-sas-green text-sas-white'

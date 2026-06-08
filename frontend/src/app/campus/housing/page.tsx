@@ -35,6 +35,7 @@ const HousingPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
 
     useEffect(() => {
         const fetchHousingData = async () => {
@@ -104,7 +105,7 @@ const HousingPage = () => {
     }, []);
 
     const filteredHousingData = useMemo(() => {
-        const normalizedQuery = searchQuery.trim().toLowerCase();
+        const normalizedQuery = normalizedSearchQuery;
 
         if (!normalizedQuery) {
             return housingData;
@@ -130,7 +131,7 @@ const HousingPage = () => {
                 }),
             }))
             .filter((campus) => campus.buildings.length > 0);
-    }, [housingData, searchQuery]);
+    }, [housingData, normalizedSearchQuery]);
 
     if (loading) {
         return <Loading />;
@@ -184,7 +185,15 @@ const HousingPage = () => {
                             {campus.buildings.map((building) => (
                                 <Link
                                     key={building.id}
-                                    href={`/campus/housing/${building.id}`}
+                                    href={{
+                                        pathname: `/campus/housing/${building.id}`,
+                                        query: searchQuery.trim()
+                                            ? {
+                                                  roomSearch:
+                                                      searchQuery.trim(),
+                                              }
+                                            : {},
+                                    }}
                                     className="block overflow-hidden rounded-md border border-sas-line bg-sas-white shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-sas-green"
                                 >
                                     <Image
@@ -205,15 +214,13 @@ const HousingPage = () => {
                                             )}
                                             ...
                                         </p>
-                                        {searchQuery.trim() &&
+                                        {normalizedSearchQuery &&
                                             building.roomNumbers.some(
                                                 (roomNumber) =>
                                                     roomNumber
                                                         .toLowerCase()
                                                         .includes(
-                                                            searchQuery
-                                                                .trim()
-                                                                .toLowerCase()
+                                                            normalizedSearchQuery
                                                         )
                                             ) && (
                                                 <p className="mt-3 text-sm text-sas-green">
@@ -223,9 +230,7 @@ const HousingPage = () => {
                                                             roomNumber
                                                                 .toLowerCase()
                                                                 .includes(
-                                                                    searchQuery
-                                                                        .trim()
-                                                                        .toLowerCase()
+                                                                    normalizedSearchQuery
                                                                 )
                                                         )
                                                         .slice(0, 5)

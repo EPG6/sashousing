@@ -496,7 +496,7 @@ const RoomPage = () => {
                 <button
                     type="button"
                     onClick={() => handleAddNewReviewClick(true)}
-                    className="fixed bottom-6 right-6 z-30 rounded-md bg-sas-green px-5 py-3 font-medium text-sas-white shadow-lg transition-colors hover:bg-sas-black focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2"
+                    className="fixed bottom-4 left-4 right-4 z-30 rounded-md bg-sas-green px-5 py-3 font-medium text-sas-white shadow-lg transition-colors hover:bg-sas-black focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2 sm:bottom-6 sm:left-auto sm:right-6"
                 >
                     Add Review
                 </button>

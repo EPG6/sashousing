@@ -7,13 +7,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { Building, Room, RoomDrawStatusResponse } from '@/types';
 import { backendUrl } from '@/utils/api';
 import Image from 'next/image';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+
+type RoomDrawStatusFilter = 'all' | 'not_taken' | 'taken';
 
 export default function DynamicRooms() {
     const params = useParams();
     const { id } = params; // Pass building id as a parameter in the URL
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initialRoomSearchQuery = searchParams.get('roomSearch') || '';
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [buildingNotFound, setBuildingNotFound] = useState(false);
@@ -24,6 +28,8 @@ export default function DynamicRooms() {
     const { user, loading: authLoading } = useAuth();
     const [showFloorPlans, setShowFloorPlans] = useState(false);
     const [roomSearchQuery, setRoomSearchQuery] = useState('');
+    const [roomDrawStatusFilter, setRoomDrawStatusFilter] =
+        useState<RoomDrawStatusFilter>('all');
 
     useEffect(() => {
         const fetchRooms = async () => {
@@ -136,6 +142,10 @@ export default function DynamicRooms() {
         fetchRooms();
     }, [id, user, authLoading]);
 
+    useEffect(() => {
+        setRoomSearchQuery(initialRoomSearchQuery);
+    }, [initialRoomSearchQuery]);
+
     const updateRoomDrawStatus = async (
         roomId: number,
         nextStatus: 'taken' | 'not_taken'
@@ -179,17 +189,31 @@ export default function DynamicRooms() {
         );
     };
 
-    const filteredRooms = useMemo(() => {
+    const displayedRooms = useMemo(() => {
         const normalizedQuery = roomSearchQuery.trim().toLowerCase();
 
-        if (!normalizedQuery) {
-            return rooms;
-        }
+        const filtered = rooms.filter((room) => {
+            const isRoomTaken = room.roomDrawStatus?.status === 'taken';
+            if (
+                roomDrawVisible &&
+                roomDrawStatusFilter === 'taken' &&
+                !isRoomTaken
+            ) {
+                return false;
+            }
+            if (
+                roomDrawVisible &&
+                roomDrawStatusFilter === 'not_taken' &&
+                isRoomTaken
+            ) {
+                return false;
+            }
 
-        return rooms.filter((room) => {
-            const roomDrawStatus = room.roomDrawStatus
-                ? 'taken'
-                : 'not taken';
+            if (!normalizedQuery) {
+                return true;
+            }
+
+            const roomDrawStatus = isRoomTaken ? 'taken' : 'not taken';
             const ratingStatus =
                 room.reviewCount && room.reviewCount > 0
                     ? `${room.averageRating?.toFixed(1) || ''} rating ${
@@ -208,7 +232,29 @@ export default function DynamicRooms() {
                 .toLowerCase()
                 .includes(normalizedQuery);
         });
-    }, [rooms, roomSearchQuery]);
+
+        if (!roomDrawVisible) {
+            return filtered;
+        }
+
+        return [...filtered].sort((a, b) => {
+            const aTaken = a.roomDrawStatus?.status === 'taken';
+            const bTaken = b.roomDrawStatus?.status === 'taken';
+
+            if (aTaken === bTaken) {
+                return a.room_number.localeCompare(b.room_number, undefined, {
+                    numeric: true,
+                });
+            }
+
+            return aTaken ? 1 : -1;
+        });
+    }, [rooms, roomSearchQuery, roomDrawStatusFilter, roomDrawVisible]);
+
+    const takenRoomCount = rooms.filter(
+        (room) => room.roomDrawStatus?.status === 'taken'
+    ).length;
+    const notTakenRoomCount = rooms.length - takenRoomCount;
 
     if (loading) {
         return <Loading />;
@@ -271,6 +317,18 @@ export default function DynamicRooms() {
                 <p className="mb-4 text-lg text-sas-black/75">
                     {building.description}
                 </p>
+
+                {roomDrawVisible && (
+                    <div className="mb-6 rounded-md border border-sas-green bg-sas-green/10 p-4">
+                        <p className="font-medium text-sas-black">
+                            Room draw reporting is active.
+                        </p>
+                        <p className="mt-1 text-sm text-sas-black/70">
+                            Not Taken rooms are shown first. Use the status
+                            filters to quickly scan availability.
+                        </p>
+                    </div>
+                )}
 
                 {/* Button to toggle floor plans */}
                 <button
@@ -349,15 +407,49 @@ export default function DynamicRooms() {
                     />
                     {roomSearchQuery.trim() && (
                         <p className="mt-2 text-sm text-sas-black/55">
-                            Showing {filteredRooms.length} of {rooms.length}{' '}
+                            Showing {displayedRooms.length} of {rooms.length}{' '}
                             rooms
                         </p>
                     )}
                 </div>
 
-                {rooms.length > 0 && filteredRooms.length > 0 ? (
+                {roomDrawVisible && (
+                    <div className="mb-6 flex flex-wrap gap-2">
+                        {(
+                            [
+                                ['all', `All (${rooms.length})`],
+                                [
+                                    'not_taken',
+                                    `Not Taken (${notTakenRoomCount})`,
+                                ],
+                                ['taken', `Taken (${takenRoomCount})`],
+                            ] as const
+                        ).map(([filter, label]) => {
+                            const isActive = roomDrawStatusFilter === filter;
+
+                            return (
+                                <button
+                                    key={filter}
+                                    type="button"
+                                    onClick={() =>
+                                        setRoomDrawStatusFilter(filter)
+                                    }
+                                    className={`rounded-md px-4 py-2 text-sm font-medium ${
+                                        isActive
+                                            ? 'bg-sas-green text-sas-white'
+                                            : 'border border-sas-line bg-sas-white text-sas-black hover:border-sas-green hover:text-sas-green'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {rooms.length > 0 && displayedRooms.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredRooms.map((room) => (
+                        {displayedRooms.map((room) => (
                             <RoomCard
                                 key={room.id}
                                 buildingName={building.name}
