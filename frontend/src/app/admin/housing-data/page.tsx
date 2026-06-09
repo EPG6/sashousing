@@ -469,7 +469,7 @@ export default function HousingDataAdminPage() {
                             {buildings.length} buildings
                         </p>
                     )}
-                    <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="mt-2 flex gap-3 overflow-x-auto pb-3">
                         {filteredBuildings.map((building) => {
                             const isSelected =
                                 building.id === selectedBuildingId;
@@ -492,7 +492,7 @@ export default function HousingDataAdminPage() {
                                     key={building.id}
                                     type="button"
                                     onClick={() => selectBuilding(building.id)}
-                                    className={`w-full rounded-md border p-4 text-left shadow-sm transition-colors ${
+                                    className={`min-h-36 w-72 shrink-0 rounded-md border p-4 text-left shadow-sm transition-colors ${
                                         isSelected
                                             ? 'border-sas-green bg-sas-green text-sas-white'
                                             : 'border-sas-line bg-sas-white text-sas-black hover:border-sas-green'
