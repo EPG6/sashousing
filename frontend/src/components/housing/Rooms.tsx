@@ -368,7 +368,7 @@ export const RoomCard = ({
                             : isInPreferenceRanking
                               ? 'Remove from Ranking'
                               : preferenceHolder
-                                ? 'Try to Bump Ranking'
+                                ? 'Bump and Rank'
                                 : 'Add to Ranking'}
                     </button>
                     {preferenceMessage && (
