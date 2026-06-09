@@ -38,6 +38,7 @@ export interface RoomDrawRoomStatus {
     status: 'taken';
     isOwner: boolean;
     updatedAt?: string;
+    markedByUserId?: string;
     markedByName?: string;
     markedByEmail?: string;
 }
@@ -55,6 +56,7 @@ export interface Review {
     temperature_rating?: number;
     comments?: string;
     housing_room_id: number;
+    user_id?: string;
     isOwner: boolean;
     pictures?: string[];
     createdAt: Date;
@@ -81,6 +83,12 @@ export interface RoomCardProps {
     canViewReviews?: boolean;
     canReportRoomDraw?: boolean;
     canOverrideRoomDraw?: boolean;
+    canMarkRoomTaken?: boolean;
+    roomTakenDisabledMessage?: string;
+    canManagePreferences?: boolean;
+    isInPreferenceRanking?: boolean;
+    onAddPreference?: (roomId: number) => Promise<void>;
+    onRemovePreference?: (roomId: number) => Promise<void>;
     onRoomDrawStatusChange?: (
         roomId: number,
         nextStatus: 'taken' | 'not_taken'
@@ -89,4 +97,25 @@ export interface RoomCardProps {
 
 export interface ReviewFormProps {
     review: Review | null;
+}
+
+export interface RoomPreference {
+    _id: string;
+    user_id: string;
+    user_email: string;
+    user_name?: string;
+    housing_room_id: number;
+    rank: number;
+    notes?: string;
+    room?: Room;
+    building?: Building;
+}
+
+export interface RoomPreferenceSummary {
+    housing_room_id: number;
+    preferenceCount: number;
+    averageRank: number;
+    topRank: number;
+    room?: Room;
+    building?: Building;
 }

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 
 type AdminTabsProps = {
-    activeTab: 'housing-data' | 'room-draw';
+    activeTab: 'housing-data' | 'room-draw' | 'room-preferences';
 };
 
 const tabs = [
@@ -16,6 +16,11 @@ const tabs = [
         id: 'room-draw',
         label: 'Room Draw',
         href: '/admin/room-draw',
+    },
+    {
+        id: 'room-preferences',
+        label: 'Preferences',
+        href: '/admin/room-preferences',
     },
 ] as const;
 

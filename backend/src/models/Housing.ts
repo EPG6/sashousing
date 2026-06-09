@@ -98,6 +98,7 @@ interface IHousingReviews extends Document {
     temperature_rating?: number;
     comments?: string;
     housing_room_id: number;
+    user_id: string;
     user_email: string;
     pictures: mongoose.Types.ObjectId[]; // list of picture _ids
 }
@@ -130,8 +131,15 @@ const HousingReviewsSchema = new Schema<IHousingReviews>(
             required: true,
             index: true,
         },
+        user_id: {
+            type: String,
+            required: true,
+            index: true,
+        },
         user_email: {
             type: String,
+            lowercase: true,
+            trim: true,
         },
         pictures: [
             {
@@ -186,6 +194,7 @@ const RoomDrawSettings =
 interface IRoomDrawStatus extends Document {
     housing_room_id: number;
     status: 'taken';
+    markedByUserId: string;
     markedByEmail: string;
     markedByName?: string;
     createdAt: Date;
@@ -206,6 +215,11 @@ const RoomDrawStatusSchema = new Schema<IRoomDrawStatus>(
             enum: ['taken'],
             default: 'taken',
             required: true,
+        },
+        markedByUserId: {
+            type: String,
+            required: true,
+            index: true,
         },
         markedByEmail: {
             type: String,
@@ -229,10 +243,69 @@ const RoomDrawStatuses =
         RoomDrawStatusSchema
     );
 
+interface IRoomPreference extends Document {
+    user_id: string;
+    user_email: string;
+    user_name?: string;
+    housing_room_id: number;
+    rank: number;
+    notes?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const RoomPreferenceSchema = new Schema<IRoomPreference>(
+    {
+        user_id: {
+            type: String,
+            required: true,
+            index: true,
+        },
+        user_email: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true,
+            index: true,
+        },
+        user_name: {
+            type: String,
+        },
+        housing_room_id: {
+            type: Number,
+            required: true,
+            ref: 'HousingRooms',
+            index: true,
+        },
+        rank: {
+            type: Number,
+            required: true,
+            min: 1,
+        },
+        notes: {
+            type: String,
+        },
+    },
+    {
+        timestamps: true,
+    }
+);
+
+RoomPreferenceSchema.index(
+    { user_id: 1, housing_room_id: 1 },
+    { unique: true }
+);
+RoomPreferenceSchema.index({ user_id: 1, rank: 1 }, { unique: true });
+
+const RoomPreferences =
+    (mongoose.models.RoomPreferences as mongoose.Model<IRoomPreference>) ||
+    mongoose.model<IRoomPreference>('RoomPreferences', RoomPreferenceSchema);
+
 export {
     HousingBuildings,
     HousingRooms,
     HousingReviews,
     RoomDrawSettings,
     RoomDrawStatuses,
+    RoomPreferences,
 };

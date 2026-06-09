@@ -12,6 +12,7 @@ import {
     HousingRooms,
     RoomDrawSettings,
     RoomDrawStatuses,
+    RoomPreferences,
 } from '../models/Housing';
 import { getHousingReviewPictures } from '../db';
 
@@ -52,6 +53,11 @@ const getRoomDrawSettingsPayload = async () => {
 const getSessionUserName = (user: Express.Request['session']['user']) =>
     user ? `${user.firstName} ${user.lastName}`.trim() : '';
 
+const getSessionUserId = (req: Request) => req.session.user?.id.trim();
+
+const getSessionUserEmail = (req: Request) =>
+    req.session.user?.email.toLowerCase().trim();
+
 const parseRequiredNumber = (value: unknown) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
@@ -67,6 +73,17 @@ const parseOptionalNumber = (value: unknown) => {
     }
 
     return parseRequiredNumber(value);
+};
+
+type RoomPreferenceInput = {
+    housing_room_id?: unknown;
+    notes?: unknown;
+};
+
+type NormalizedRoomPreferenceInput = {
+    housing_room_id: number;
+    rank: number;
+    notes?: string;
 };
 
 /**
@@ -513,7 +530,7 @@ router.get(
             const statuses = await RoomDrawStatuses.find({
                 housing_room_id: { $in: roomIds },
             }).lean();
-            const sessionEmail = req.session.user?.email;
+            const sessionUserId = req.session.user?.id;
             const isSessionAdmin = Boolean(req.session.user?.isAdmin);
 
             const statusMap = statuses.reduce<
@@ -523,6 +540,7 @@ router.get(
                         status: 'taken';
                         isOwner: boolean;
                         updatedAt?: Date;
+                        markedByUserId?: string;
                         markedByName?: string;
                         markedByEmail?: string;
                     }
@@ -530,11 +548,13 @@ router.get(
             >((acc, status) => {
                 acc[status.housing_room_id] = {
                     status: 'taken',
-                    isOwner: status.markedByEmail === sessionEmail,
+                    isOwner: status.markedByUserId === sessionUserId,
                     updatedAt: status.updatedAt,
                 };
 
                 if (isSessionAdmin) {
+                    acc[status.housing_room_id].markedByUserId =
+                        status.markedByUserId;
                     acc[status.housing_room_id].markedByName =
                         status.markedByName;
                     acc[status.housing_room_id].markedByEmail =
@@ -596,7 +616,7 @@ router.patch(
 
             if (
                 existingStatus &&
-                existingStatus.markedByEmail !== sessionUser.email &&
+                existingStatus.markedByUserId !== sessionUser.id &&
                 !sessionUser.isAdmin
             ) {
                 res.status(403).json({
@@ -619,6 +639,20 @@ router.patch(
                 return;
             }
 
+            if (!sessionUser.isAdmin) {
+                const existingUserClaim = await RoomDrawStatuses.findOne({
+                    markedByUserId: sessionUser.id,
+                    housing_room_id: { $ne: roomId },
+                });
+
+                if (existingUserClaim) {
+                    res.status(403).json({
+                        message: 'You can only mark one room taken at a time',
+                    });
+                    return;
+                }
+            }
+
             let updatedStatus;
             if (existingStatus) {
                 updatedStatus = await RoomDrawStatuses.findOneAndUpdate(
@@ -626,10 +660,11 @@ router.patch(
                         ? { housing_room_id: roomId }
                         : {
                               housing_room_id: roomId,
-                              markedByEmail: sessionUser.email,
+                              markedByUserId: sessionUser.id,
                           },
                     {
                         status: 'taken',
+                        markedByUserId: sessionUser.id,
                         markedByEmail: sessionUser.email,
                         markedByName: getSessionUserName(sessionUser),
                     },
@@ -642,6 +677,7 @@ router.patch(
                     updatedStatus = await RoomDrawStatuses.create({
                         housing_room_id: roomId,
                         status: 'taken',
+                        markedByUserId: sessionUser.id,
                         markedByEmail: sessionUser.email,
                         markedByName: getSessionUserName(sessionUser),
                     });
@@ -676,12 +712,363 @@ router.patch(
                 updatedAt: updatedStatus.updatedAt,
                 ...(sessionUser.isAdmin
                     ? {
+                          markedByUserId: updatedStatus.markedByUserId,
                           markedByName: updatedStatus.markedByName,
                           markedByEmail: updatedStatus.markedByEmail,
                       }
                     : {}),
                 ...settings,
             });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   GET /api/campus/housing/room-preferences
+ * @desc    Get the signed-in user's ranked room preferences
+ * @access  isAuthenticated
+ */
+router.get(
+    '/room-preferences',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const preferences = await RoomPreferences.find({
+                user_id: userId,
+            })
+                .sort({ rank: 1 })
+                .lean();
+
+            const roomIds = preferences.map(
+                (preference) => preference.housing_room_id
+            );
+            const rooms = await HousingRooms.find({
+                id: { $in: roomIds },
+            }).lean();
+            const buildings = await HousingBuildings.find({
+                id: { $in: rooms.map((room) => room.housing_building_id) },
+            }).lean();
+
+            const roomsById = new Map(rooms.map((room) => [room.id, room]));
+            const buildingsById = new Map(
+                buildings.map((building) => [building.id, building])
+            );
+
+            res.json(
+                preferences.map((preference) => {
+                    const room = roomsById.get(preference.housing_room_id);
+                    const building = room
+                        ? buildingsById.get(room.housing_building_id)
+                        : null;
+
+                    return {
+                        ...preference,
+                        room,
+                        building,
+                    };
+                })
+            );
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   PUT /api/campus/housing/room-preferences
+ * @desc    Replace the signed-in user's ranked room preference list
+ * @access  isAuthenticated
+ */
+router.put(
+    '/room-preferences',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            const sessionUser = req.session.user!;
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const items: RoomPreferenceInput[] = Array.isArray(req.body.items)
+                ? req.body.items
+                : [];
+            if (items.length > 20) {
+                res.status(400).json({
+                    message: 'Preference lists can include up to 20 rooms',
+                });
+                return;
+            }
+
+            const normalizedItems: NormalizedRoomPreferenceInput[] = items.map(
+                (item, index) => ({
+                    housing_room_id: Number(item.housing_room_id),
+                    rank: index + 1,
+                    notes:
+                        item.notes === undefined
+                            ? undefined
+                            : String(item.notes).trim().slice(0, 500),
+                })
+            );
+
+            if (
+                normalizedItems.some(
+                    (item) => !Number.isInteger(item.housing_room_id)
+                )
+            ) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            const uniqueRoomIds = new Set(
+                normalizedItems.map((item) => item.housing_room_id)
+            );
+            if (uniqueRoomIds.size !== normalizedItems.length) {
+                res.status(400).json({
+                    message: 'A room can only appear once in your ranking',
+                });
+                return;
+            }
+
+            const roomCount = await HousingRooms.countDocuments({
+                id: { $in: [...uniqueRoomIds] },
+            });
+            if (roomCount !== uniqueRoomIds.size) {
+                res.status(404).json({ message: 'One or more rooms were not found' });
+                return;
+            }
+
+            await RoomPreferences.deleteMany({ user_id: userId });
+            if (normalizedItems.length > 0) {
+                await RoomPreferences.insertMany(
+                    normalizedItems.map((item) => ({
+                        user_id: userId,
+                        user_email: userEmail,
+                        user_name: getSessionUserName(sessionUser),
+                        housing_room_id: item.housing_room_id,
+                        rank: item.rank,
+                        notes: item.notes,
+                    }))
+                );
+            }
+
+            res.json({ message: 'Room preferences saved' });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   POST /api/campus/housing/room-preferences/rooms/:roomId
+ * @desc    Add a room to the signed-in user's ranked preference list
+ * @access  isAuthenticated
+ */
+router.post(
+    '/room-preferences/rooms/:roomId',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            const sessionUser = req.session.user!;
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const roomId = parseInt(getParam(req.params.roomId), 10);
+            if (isNaN(roomId)) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            const room = await HousingRooms.findOne({ id: roomId });
+            if (!room) {
+                res.status(404).json({ message: 'Room not found' });
+                return;
+            }
+
+            const existingPreference = await RoomPreferences.findOne({
+                user_id: userId,
+                housing_room_id: roomId,
+            });
+            if (existingPreference) {
+                res.json({
+                    message: 'Room is already in your preferences',
+                    preference: existingPreference,
+                });
+                return;
+            }
+
+            const preferenceCount = await RoomPreferences.countDocuments({
+                user_id: userId,
+            });
+            if (preferenceCount >= 20) {
+                res.status(400).json({
+                    message: 'Preference lists can include up to 20 rooms',
+                });
+                return;
+            }
+
+            const preference = await RoomPreferences.create({
+                user_id: userId,
+                user_email: userEmail,
+                user_name: getSessionUserName(sessionUser),
+                housing_room_id: roomId,
+                rank: preferenceCount + 1,
+            });
+
+            res.status(201).json({
+                message: 'Room added to preferences',
+                preference,
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   DELETE /api/campus/housing/room-preferences/rooms/:roomId
+ * @desc    Remove a room from the signed-in user's ranked preference list
+ * @access  isAuthenticated
+ */
+router.delete(
+    '/room-preferences/rooms/:roomId',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const roomId = parseInt(getParam(req.params.roomId), 10);
+            if (isNaN(roomId)) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            await RoomPreferences.deleteOne({
+                user_id: userId,
+                housing_room_id: roomId,
+            });
+
+            const remainingPreferences = await RoomPreferences.find({
+                user_id: userId,
+            }).sort({ rank: 1 });
+
+            await Promise.all(
+                remainingPreferences.map((preference, index) => {
+                    preference.rank = index + 1;
+                    return preference.save();
+                })
+            );
+
+            res.json({ message: 'Room removed from preferences' });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   GET /api/campus/housing/admin/room-preferences/summary
+ * @desc    Get aggregate room preference demand for admins
+ * @access  Admin
+ */
+router.get(
+    '/admin/room-preferences/summary',
+    isAdmin,
+    async (_req: Request, res: Response) => {
+        try {
+            const summary = await RoomPreferences.aggregate([
+                {
+                    $group: {
+                        _id: '$housing_room_id',
+                        preferenceCount: { $sum: 1 },
+                        averageRank: { $avg: '$rank' },
+                        topRank: { $min: '$rank' },
+                    },
+                },
+                { $sort: { preferenceCount: -1, averageRank: 1 } },
+            ]);
+
+            const roomIds = summary.map((item) => item._id);
+            const rooms = await HousingRooms.find({
+                id: { $in: roomIds },
+            }).lean();
+            const buildings = await HousingBuildings.find({
+                id: { $in: rooms.map((room) => room.housing_building_id) },
+            }).lean();
+            const roomsById = new Map(rooms.map((room) => [room.id, room]));
+            const buildingsById = new Map(
+                buildings.map((building) => [building.id, building])
+            );
+
+            res.json(
+                summary.map((item) => {
+                    const room = roomsById.get(item._id);
+                    const building = room
+                        ? buildingsById.get(room.housing_building_id)
+                        : null;
+
+                    return {
+                        housing_room_id: item._id,
+                        preferenceCount: item.preferenceCount,
+                        averageRank: item.averageRank,
+                        topRank: item.topRank,
+                        room,
+                        building,
+                    };
+                })
+            );
         } catch (error) {
             res.status(500).json({ message: 'Server error' });
         }
@@ -790,10 +1177,10 @@ router.get(
                 housing_room_id: roomId,
             }).lean();
 
-            const sessionEmail = req.session.user!.email;
-            const safeReviews = reviews.map(({ user_email, ...fields }) => ({
+            const sessionUserId = req.session.user!.id;
+            const safeReviews = reviews.map(({ user_id, user_email, ...fields }) => ({
                 ...fields,
-                isOwner: user_email === sessionEmail,
+                isOwner: user_id === sessionUserId,
             }));
 
             // Calculate average ratings
@@ -887,10 +1274,10 @@ router.get(
                 housing_room_id: roomData.id,
             }).lean();
 
-            const sessionEmail = req.session.user!.email;
-            const safeReviews = reviews.map(({ user_email, ...fields }) => ({
+            const sessionUserId = req.session.user!.id;
+            const safeReviews = reviews.map(({ user_id, user_email, ...fields }) => ({
                 ...fields,
-                isOwner: user_email === sessionEmail,
+                isOwner: user_id === sessionUserId,
             }));
 
             // Calculate average ratings
@@ -1034,6 +1421,7 @@ router.post(
                 temperature_rating: temperature,
                 comments: comments,
                 housing_room_id: roomData.id,
+                user_id: req.session.user!.id,
                 user_email: req.session.user!.email,
                 pictures: pictureIds,
             };

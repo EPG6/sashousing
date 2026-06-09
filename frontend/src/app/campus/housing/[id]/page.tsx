@@ -4,9 +4,15 @@ import Loading from '@/components/Loading';
 import SiteHeader from '@/components/SiteHeader';
 import { RoomCard, getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
-import { Building, Room, RoomDrawStatusResponse } from '@/types';
+import {
+    Building,
+    Room,
+    RoomDrawStatusResponse,
+    RoomPreference,
+} from '@/types';
 import { backendUrl } from '@/utils/api';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -24,7 +30,11 @@ export default function DynamicRooms() {
     const [rooms, setRooms] = useState<Room[]>([]);
     const [building, setBuilding] = useState<Building | null>(null);
     const [roomDrawVisible, setRoomDrawVisible] = useState(false);
+    const [preferenceRoomIds, setPreferenceRoomIds] = useState<Set<number>>(
+        new Set()
+    );
     const [safeName, setSafeName] = useState<string>('');
+    const [imageErrored, setImageErrored] = useState(false);
     const { user, loading: authLoading } = useAuth();
     const [showFloorPlans, setShowFloorPlans] = useState(false);
     const [roomSearchQuery, setRoomSearchQuery] = useState('');
@@ -113,6 +123,17 @@ export default function DynamicRooms() {
                                   }
                               >),
                     ]);
+                const preferencesResponse =
+                    !authLoading && user && roomDrawData.isVisible
+                        ? await fetch(
+                              `${backendUrl}/api/campus/housing/room-preferences`,
+                              { credentials: 'include' }
+                          )
+                        : null;
+                const preferencesData =
+                    preferencesResponse?.ok
+                        ? ((await preferencesResponse.json()) as RoomPreference[])
+                        : [];
 
                 setBuilding(buildingData);
                 setSafeName(
@@ -121,8 +142,16 @@ export default function DynamicRooms() {
                         .replace(/\s+/g, '-')
                         .replace(/-+/g, '-')
                 );
+                setImageErrored(false);
 
                 setRoomDrawVisible(roomDrawData.isVisible);
+                setPreferenceRoomIds(
+                    new Set(
+                        preferencesData.map(
+                            (preference) => preference.housing_room_id
+                        )
+                    )
+                );
                 setRooms(
                     roomsData.map((room: Room) => ({
                         ...room,
@@ -179,6 +208,7 @@ export default function DynamicRooms() {
                                         status: 'taken',
                                         isOwner: data.isOwner,
                                         updatedAt: data.updatedAt,
+                                        markedByUserId: data.markedByUserId,
                                         markedByName: data.markedByName,
                                         markedByEmail: data.markedByEmail,
                                     }
@@ -187,6 +217,50 @@ export default function DynamicRooms() {
                     : currentRoom
             )
         );
+    };
+
+    const addRoomPreference = async (roomId: number) => {
+        const response = await fetch(
+            `${backendUrl}/api/campus/housing/room-preferences/rooms/${roomId}`,
+            {
+                method: 'POST',
+                credentials: 'include',
+            }
+        );
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => null);
+            throw new Error(data?.message || 'Failed to add room preference');
+        }
+
+        setPreferenceRoomIds((currentRoomIds) => {
+            const nextRoomIds = new Set(currentRoomIds);
+            nextRoomIds.add(roomId);
+            return nextRoomIds;
+        });
+    };
+
+    const removeRoomPreference = async (roomId: number) => {
+        const response = await fetch(
+            `${backendUrl}/api/campus/housing/room-preferences/rooms/${roomId}`,
+            {
+                method: 'DELETE',
+                credentials: 'include',
+            }
+        );
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => null);
+            throw new Error(
+                data?.message || 'Failed to remove room preference'
+            );
+        }
+
+        setPreferenceRoomIds((currentRoomIds) => {
+            const nextRoomIds = new Set(currentRoomIds);
+            nextRoomIds.delete(roomId);
+            return nextRoomIds;
+        });
     };
 
     const displayedRooms = useMemo(() => {
@@ -238,6 +312,15 @@ export default function DynamicRooms() {
         }
 
         return [...filtered].sort((a, b) => {
+            if (!user?.isAdmin) {
+                const aIsUserTakenRoom = Boolean(a.roomDrawStatus?.isOwner);
+                const bIsUserTakenRoom = Boolean(b.roomDrawStatus?.isOwner);
+
+                if (aIsUserTakenRoom !== bIsUserTakenRoom) {
+                    return aIsUserTakenRoom ? -1 : 1;
+                }
+            }
+
             const aTaken = a.roomDrawStatus?.status === 'taken';
             const bTaken = b.roomDrawStatus?.status === 'taken';
 
@@ -249,12 +332,21 @@ export default function DynamicRooms() {
 
             return aTaken ? 1 : -1;
         });
-    }, [rooms, roomSearchQuery, roomDrawStatusFilter, roomDrawVisible]);
+    }, [
+        rooms,
+        roomSearchQuery,
+        roomDrawStatusFilter,
+        roomDrawVisible,
+        user?.isAdmin,
+    ]);
 
     const takenRoomCount = rooms.filter(
         (room) => room.roomDrawStatus?.status === 'taken'
     ).length;
     const notTakenRoomCount = rooms.length - takenRoomCount;
+    const currentUserTakenRoom = user?.isAdmin
+        ? null
+        : rooms.find((room) => room.roomDrawStatus?.isOwner) || null;
 
     if (loading) {
         return <Loading />;
@@ -308,10 +400,15 @@ export default function DynamicRooms() {
                     {building.name}
                 </h1>
                 <Image
-                    src={`/buildings/${safeName}.jpg`}
+                    src={
+                        imageErrored
+                            ? '/housing/accommodation-hero.jpg'
+                            : `/buildings/${safeName}.jpg`
+                    }
                     width={800}
                     height={400}
                     alt={building.name}
+                    onError={() => setImageErrored(true)}
                     className="mb-6 max-h-[500px] w-full rounded-md object-cover"
                 />
                 <p className="mb-4 text-lg text-sas-black/75">
@@ -389,6 +486,14 @@ export default function DynamicRooms() {
                         {building.name} has {rooms.length} room
                         {rooms.length !== 1 ? 's' : ''}
                     </p>
+                    {user && roomDrawVisible && (
+                        <Link
+                            href="/campus/housing/preferences"
+                            className="mt-3 inline-flex rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            View My Ranking
+                        </Link>
+                    )}
                 </div>
 
                 <div className="mb-6 max-w-xl">
@@ -457,6 +562,21 @@ export default function DynamicRooms() {
                                 canViewReviews={!!user}
                                 canReportRoomDraw={roomDrawVisible}
                                 canOverrideRoomDraw={!!user?.isAdmin}
+                                canMarkRoomTaken={
+                                    !currentUserTakenRoom ||
+                                    currentUserTakenRoom.id === room.id
+                                }
+                                roomTakenDisabledMessage={
+                                    currentUserTakenRoom
+                                        ? `You already marked room ${currentUserTakenRoom.room_number} taken. Mark it not taken before choosing another room.`
+                                        : undefined
+                                }
+                                canManagePreferences={!!user && roomDrawVisible}
+                                isInPreferenceRanking={preferenceRoomIds.has(
+                                    room.id
+                                )}
+                                onAddPreference={addRoomPreference}
+                                onRemovePreference={removeRoomPreference}
                                 onRoomDrawStatusChange={updateRoomDrawStatus}
                             />
                         ))}

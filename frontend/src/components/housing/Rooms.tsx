@@ -31,6 +31,10 @@ export const getRoomOccupancyType = (occupancy_type: number | undefined) => {
                 return 'Double';
             case 3:
                 return 'Triple';
+            case 4:
+                return 'Suite';
+            case 5:
+                return 'Apartment';
             default:
                 return occupancy_type;
         }
@@ -45,9 +49,19 @@ export const RoomCard = ({
     canViewReviews = true,
     canReportRoomDraw = false,
     canOverrideRoomDraw = false,
+    canMarkRoomTaken = true,
+    roomTakenDisabledMessage,
+    canManagePreferences = false,
+    isInPreferenceRanking = false,
+    onAddPreference,
+    onRemovePreference,
     onRoomDrawStatusChange,
 }: RoomCardProps) => {
     const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [updatingPreference, setUpdatingPreference] = useState(false);
+    const [preferenceMessage, setPreferenceMessage] = useState<string | null>(
+        null
+    );
     const isTaken = room.roomDrawStatus?.status === 'taken';
     const canChangeTakenStatus =
         !isTaken || room.roomDrawStatus?.isOwner || canOverrideRoomDraw;
@@ -86,6 +100,34 @@ export const RoomCard = ({
             );
         } finally {
             setUpdatingStatus(false);
+        }
+    };
+
+    const togglePreference = async () => {
+        const handler = isInPreferenceRanking
+            ? onRemovePreference
+            : onAddPreference;
+        if (!handler) {
+            return;
+        }
+
+        try {
+            setUpdatingPreference(true);
+            setPreferenceMessage(null);
+            await handler(room.id);
+            setPreferenceMessage(
+                isInPreferenceRanking
+                    ? 'Removed from ranking'
+                    : 'Added to ranking'
+            );
+        } catch (error) {
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to update room preference'
+            );
+        } finally {
+            setUpdatingPreference(false);
         }
     };
 
@@ -177,7 +219,9 @@ export const RoomCard = ({
                                     onClick={() =>
                                         changeRoomDrawStatus('taken')
                                     }
-                                    disabled={updatingStatus}
+                                    disabled={
+                                        updatingStatus || !canMarkRoomTaken
+                                    }
                                     className="rounded-md bg-sas-green px-3 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
                                 >
                                     {updatingStatus
@@ -202,6 +246,14 @@ export const RoomCard = ({
                             <p>Updated {markedAt}</p>
                         </div>
                     )}
+                    {!isTaken &&
+                        canViewReviews &&
+                        !canMarkRoomTaken &&
+                        roomTakenDisabledMessage && (
+                            <p className="mt-3 border-t border-sas-line pt-3 text-xs text-sas-black/60">
+                                {roomTakenDisabledMessage}
+                            </p>
+                        )}
                 </div>
             )}
 
@@ -213,6 +265,31 @@ export const RoomCard = ({
                     {canViewReviews ? 'View Reviews' : 'Sign in to View Reviews'}
                 </button>
             </Link>
+            {canManagePreferences && (
+                <div className="mt-3">
+                    <button
+                        type="button"
+                        onClick={togglePreference}
+                        disabled={updatingPreference}
+                        className={`rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
+                            isInPreferenceRanking
+                                ? 'border border-sas-green text-sas-green hover:bg-sas-green hover:text-sas-white'
+                                : 'bg-sas-green text-sas-white hover:bg-sas-black'
+                        }`}
+                    >
+                        {updatingPreference
+                            ? 'Updating...'
+                            : isInPreferenceRanking
+                              ? 'Remove from Ranking'
+                              : 'Add to Ranking'}
+                    </button>
+                    {preferenceMessage && (
+                        <p className="mt-2 text-sm text-sas-green">
+                            {preferenceMessage}
+                        </p>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

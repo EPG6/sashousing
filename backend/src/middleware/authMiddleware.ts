@@ -33,7 +33,7 @@ export const isHousingReviewOwner = async (
     res: Response,
     next: NextFunction
 ) => {
-    if (!req.session.user?.email) {
+    if (!req.session.user?.id) {
         res.status(401).json({ message: 'Authentication required' });
         return;
     }
@@ -47,7 +47,7 @@ export const isHousingReviewOwner = async (
         return;
     }
 
-    if (review.user_email !== req.session.user.email) {
+    if (review.user_id !== req.session.user.id) {
         res.status(403).json({
             message: 'You are not authorized to modify this review',
         });
