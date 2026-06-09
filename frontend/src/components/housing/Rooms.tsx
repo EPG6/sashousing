@@ -85,6 +85,24 @@ export const RoomCard = ({
               timeStyle: 'short',
           })
         : null;
+    const preferenceHolder = room.roomPreferenceHolder;
+    const preferenceHolderDrawTime = preferenceHolder?.drawDate
+        ? new Date(preferenceHolder.drawDate).toLocaleString(undefined, {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+          })
+        : null;
+    const preferenceHolderLabel = preferenceHolder
+        ? [
+              preferenceHolder.initials,
+              preferenceHolder.classYear
+                  ? `Year ${preferenceHolder.classYear}`
+                  : null,
+              preferenceHolderDrawTime,
+          ]
+              .filter(Boolean)
+              .join(' - ')
+        : null;
     const roomDrawCardClasses = canReportRoomDraw
         ? isTaken
             ? 'border-red-300 bg-red-50/70'
@@ -323,6 +341,18 @@ export const RoomCard = ({
             </Link>
             {canManagePreferences && (
                 <div className="mt-3">
+                    {preferenceHolderLabel && (
+                        <div className="mb-3 rounded-md border border-sas-line bg-sas-mist px-3 py-2 text-xs text-sas-black/65">
+                            <p className="font-medium text-sas-black">
+                                Ranked by {preferenceHolderLabel}
+                            </p>
+                            {!preferenceHolder?.isOwner && (
+                                <p className="mt-1">
+                                    Better room priority can bump this ranking.
+                                </p>
+                            )}
+                        </div>
+                    )}
                     <button
                         type="button"
                         onClick={togglePreference}
@@ -337,7 +367,9 @@ export const RoomCard = ({
                             ? 'Updating...'
                             : isInPreferenceRanking
                               ? 'Remove from Ranking'
-                              : 'Add to Ranking'}
+                              : preferenceHolder
+                                ? 'Try to Bump Ranking'
+                                : 'Add to Ranking'}
                     </button>
                     {preferenceMessage && (
                         <p className="mt-2 text-sm text-sas-green">

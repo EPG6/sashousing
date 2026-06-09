@@ -36,6 +36,7 @@ export interface Room {
     averageRating?: number;
     reviewCount?: number;
     roomDrawStatus?: RoomDrawRoomStatus;
+    roomPreferenceHolder?: RoomPreferenceHolder;
 }
 
 export interface RoomDrawSettings {
@@ -66,6 +67,14 @@ export interface RoomDrawStatusResponse extends RoomDrawSettings {
     statuses: Record<number, RoomDrawRoomStatus>;
     priority?: RoomDrawPriority | null;
     requiresPriority?: boolean;
+}
+
+export interface RoomPreferenceHolder {
+    initials: string;
+    name?: string;
+    classYear?: number;
+    drawDate?: string;
+    isOwner?: boolean;
 }
 
 export interface Review {
@@ -128,8 +137,11 @@ export interface RoomPreference {
     housing_room_id: number;
     rank: number;
     notes?: string;
+    status?: 'active' | 'bumped';
     room?: Room;
     building?: Building;
+    rankOwner?: RoomPreferenceHolder;
+    bumpedBy?: (RoomPreferenceHolder & { bumpedAt?: string }) | null;
 }
 
 export interface RoomPreferenceSummary {

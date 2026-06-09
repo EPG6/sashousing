@@ -10,6 +10,7 @@ import {
     RoomDrawPriority,
     RoomDrawStatusResponse,
     RoomPreference,
+    RoomPreferenceHolder,
 } from '@/types';
 import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
@@ -161,10 +162,27 @@ export default function DynamicRooms() {
                               { credentials: 'include' }
                           )
                         : null;
+                const preferenceHoldersResponse =
+                    !authLoading &&
+                    user &&
+                    roomDrawData.isVisible &&
+                    !roomDrawData.requiresPriority
+                        ? await fetch(
+                              `${backendUrl}/api/campus/housing/${buildingId}/room-preferences/holders`,
+                              { credentials: 'include' }
+                          )
+                        : null;
                 const preferencesData =
                     preferencesResponse?.ok
                         ? ((await preferencesResponse.json()) as RoomPreference[])
                         : [];
+                const preferenceHolders =
+                    preferenceHoldersResponse?.ok
+                        ? ((await preferenceHoldersResponse.json()) as Record<
+                              number,
+                              RoomPreferenceHolder
+                          >)
+                        : {};
 
                 setBuilding(buildingData);
                 setSafeName(
@@ -190,9 +208,9 @@ export default function DynamicRooms() {
                 });
                 setPreferenceRoomIds(
                     new Set(
-                        preferencesData.map(
-                            (preference) => preference.housing_room_id
-                        )
+                        preferencesData
+                            .filter((preference) => preference.status !== 'bumped')
+                            .map((preference) => preference.housing_room_id)
                     )
                 );
                 setRooms(
@@ -201,6 +219,7 @@ export default function DynamicRooms() {
                         averageRating: ratingsMap[room.id]?.overallAverage || 0,
                         reviewCount: ratingsMap[room.id]?.reviewCount || 0,
                         roomDrawStatus: roomDrawData.statuses[room.id],
+                        roomPreferenceHolder: preferenceHolders[room.id],
                     }))
                 );
             } catch (error) {
@@ -303,35 +322,47 @@ export default function DynamicRooms() {
             setRoomDrawRequiresPriority(false);
 
             const buildingId = Number(id);
-            const [statusesResponse, preferencesResponse] = await Promise.all([
-                fetch(
-                    `${backendUrl}/api/campus/housing/${buildingId}/room-draw/statuses`,
-                    { credentials: 'include' }
-                ),
-                fetch(`${backendUrl}/api/campus/housing/room-preferences`, {
-                    credentials: 'include',
-                }),
-            ]);
+            const [statusesResponse, preferencesResponse, holdersResponse] =
+                await Promise.all([
+                    fetch(
+                        `${backendUrl}/api/campus/housing/${buildingId}/room-draw/statuses`,
+                        { credentials: 'include' }
+                    ),
+                    fetch(`${backendUrl}/api/campus/housing/room-preferences`, {
+                        credentials: 'include',
+                    }),
+                    fetch(
+                        `${backendUrl}/api/campus/housing/${buildingId}/room-preferences/holders`,
+                        { credentials: 'include' }
+                    ),
+                ]);
             const statusesData = statusesResponse.ok
                 ? ((await statusesResponse.json()) as RoomDrawStatusResponse)
                 : null;
             const preferencesData = preferencesResponse.ok
                 ? ((await preferencesResponse.json()) as RoomPreference[])
                 : [];
+            const holdersData = holdersResponse.ok
+                ? ((await holdersResponse.json()) as Record<
+                      number,
+                      RoomPreferenceHolder
+                  >)
+                : {};
 
             if (statusesData) {
                 setRooms((currentRooms) =>
                     currentRooms.map((room) => ({
                         ...room,
                         roomDrawStatus: statusesData.statuses[room.id],
+                        roomPreferenceHolder: holdersData[room.id],
                     }))
                 );
             }
             setPreferenceRoomIds(
                 new Set(
-                    preferencesData.map(
-                        (preference) => preference.housing_room_id
-                    )
+                    preferencesData
+                        .filter((preference) => preference.status !== 'bumped')
+                        .map((preference) => preference.housing_room_id)
                 )
             );
         } catch (error) {
@@ -344,6 +375,42 @@ export default function DynamicRooms() {
         } finally {
             setSavingPriority(false);
         }
+    };
+
+    const refreshRoomPreferences = async () => {
+        const buildingId = Number(id);
+        const [preferencesResponse, holdersResponse] = await Promise.all([
+            fetch(`${backendUrl}/api/campus/housing/room-preferences`, {
+                credentials: 'include',
+            }),
+            fetch(
+                `${backendUrl}/api/campus/housing/${buildingId}/room-preferences/holders`,
+                { credentials: 'include' }
+            ),
+        ]);
+        const preferencesData = preferencesResponse.ok
+            ? ((await preferencesResponse.json()) as RoomPreference[])
+            : [];
+        const holdersData = holdersResponse.ok
+            ? ((await holdersResponse.json()) as Record<
+                  number,
+                  RoomPreferenceHolder
+              >)
+            : {};
+
+        setPreferenceRoomIds(
+            new Set(
+                preferencesData
+                    .filter((preference) => preference.status !== 'bumped')
+                    .map((preference) => preference.housing_room_id)
+            )
+        );
+        setRooms((currentRooms) =>
+            currentRooms.map((room) => ({
+                ...room,
+                roomPreferenceHolder: holdersData[room.id],
+            }))
+        );
     };
 
     const addRoomPreference = async (roomId: number) => {
@@ -364,11 +431,7 @@ export default function DynamicRooms() {
             );
         }
 
-        setPreferenceRoomIds((currentRoomIds) => {
-            const nextRoomIds = new Set(currentRoomIds);
-            nextRoomIds.add(roomId);
-            return nextRoomIds;
-        });
+        await refreshRoomPreferences();
     };
 
     const removeRoomPreference = async (roomId: number) => {
@@ -389,11 +452,7 @@ export default function DynamicRooms() {
             );
         }
 
-        setPreferenceRoomIds((currentRoomIds) => {
-            const nextRoomIds = new Set(currentRoomIds);
-            nextRoomIds.delete(roomId);
-            return nextRoomIds;
-        });
+        await refreshRoomPreferences();
     };
 
     const displayedRooms = useMemo(() => {

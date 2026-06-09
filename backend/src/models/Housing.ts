@@ -350,6 +350,13 @@ interface IRoomPreference extends Document {
     housing_room_id: number;
     rank: number;
     notes?: string;
+    status: 'active' | 'bumped';
+    bumpedByUserId?: string;
+    bumpedByEmail?: string;
+    bumpedByName?: string;
+    bumpedByClassYear?: number;
+    bumpedByDrawDate?: Date;
+    bumpedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -385,6 +392,35 @@ const RoomPreferenceSchema = new Schema<IRoomPreference>(
         notes: {
             type: String,
         },
+        status: {
+            type: String,
+            enum: ['active', 'bumped'],
+            default: 'active',
+            required: true,
+            index: true,
+        },
+        bumpedByUserId: {
+            type: String,
+        },
+        bumpedByEmail: {
+            type: String,
+            lowercase: true,
+            trim: true,
+        },
+        bumpedByName: {
+            type: String,
+        },
+        bumpedByClassYear: {
+            type: Number,
+            min: 1,
+            max: 4,
+        },
+        bumpedByDrawDate: {
+            type: Date,
+        },
+        bumpedAt: {
+            type: Date,
+        },
     },
     {
         timestamps: true,
@@ -392,10 +428,17 @@ const RoomPreferenceSchema = new Schema<IRoomPreference>(
 );
 
 RoomPreferenceSchema.index(
-    { user_id: 1, housing_room_id: 1 },
+    { user_id: 1, housing_room_id: 1, status: 1 },
     { unique: true }
 );
-RoomPreferenceSchema.index({ user_id: 1, rank: 1 }, { unique: true });
+RoomPreferenceSchema.index(
+    { user_id: 1, rank: 1 },
+    { unique: true, partialFilterExpression: { status: 'active' } }
+);
+RoomPreferenceSchema.index(
+    { housing_room_id: 1 },
+    { unique: true, partialFilterExpression: { status: 'active' } }
+);
 
 const RoomPreferences =
     (mongoose.models.RoomPreferences as mongoose.Model<IRoomPreference>) ||

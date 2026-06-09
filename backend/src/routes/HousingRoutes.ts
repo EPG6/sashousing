@@ -169,6 +169,8 @@ type NormalizedRoomPreferenceInput = {
     notes?: string;
 };
 
+const MAX_ACTIVE_ROOM_PREFERENCES = 2;
+
 const getRoomDrawParticipant = async (req: Request) => {
     const userId = getSessionUserId(req);
     if (!userId) {
@@ -186,6 +188,72 @@ const requiresRoomDrawPriority = async (req: Request) => {
     const participant = await getRoomDrawParticipant(req);
     return !participant?.classYear || !participant?.drawDate;
 };
+
+const isBetterRoomDrawPriority = (
+    challenger: { classYear: number; drawDate: Date },
+    incumbent: { classYear: number; drawDate: Date },
+    roomYear?: number | null
+) => {
+    if (roomYear) {
+        const challengerMatchesRoomYear = challenger.classYear === roomYear;
+        const incumbentMatchesRoomYear = incumbent.classYear === roomYear;
+
+        if (challengerMatchesRoomYear !== incumbentMatchesRoomYear) {
+            return challengerMatchesRoomYear;
+        }
+    }
+
+    return challenger.drawDate.getTime() < incumbent.drawDate.getTime();
+};
+
+const getInitials = (name?: string, email?: string) => {
+    const nameInitials = String(name || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('');
+
+    if (nameInitials) {
+        return nameInitials;
+    }
+
+    return String(email || '')
+        .trim()
+        .slice(0, 2)
+        .toUpperCase();
+};
+
+const toRoomPreferencePayload = (
+    preference: Record<string, any>,
+    room?: Record<string, any> | null,
+    building?: Record<string, any> | null,
+    ownerPriority?: Record<string, any> | null
+) => ({
+    ...preference,
+    room,
+    building,
+    rankOwner: {
+        initials: getInitials(preference.user_name, preference.user_email),
+        name: preference.user_name,
+        classYear: ownerPriority?.classYear,
+        drawDate: ownerPriority?.drawDate,
+    },
+    bumpedBy:
+        preference.status === 'bumped'
+            ? {
+                  initials: getInitials(
+                      preference.bumpedByName,
+                      preference.bumpedByEmail
+                  ),
+                  name: preference.bumpedByName,
+                  classYear: preference.bumpedByClassYear,
+                  drawDate: preference.bumpedByDrawDate,
+                  bumpedAt: preference.bumpedAt,
+              }
+            : null,
+});
 
 /**
  * @route   GET /api/campus/housing
@@ -1083,8 +1151,13 @@ router.get(
 
             const preferences = await RoomPreferences.find({
                 user_id: userId,
+                $or: [
+                    { status: 'active' },
+                    { status: 'bumped' },
+                    { status: { $exists: false } },
+                ],
             })
-                .sort({ rank: 1 })
+                .sort({ status: 1, rank: 1, updatedAt: -1 })
                 .lean();
 
             const roomIds = preferences.map(
@@ -1096,10 +1169,22 @@ router.get(
             const buildings = await HousingBuildings.find({
                 id: { $in: rooms.map((room) => room.housing_building_id) },
             }).lean();
+            const participantIds = preferences.map(
+                (preference) => preference.user_id
+            );
+            const participants = await RoomDrawParticipants.find({
+                user_id: { $in: participantIds },
+            }).lean();
 
             const roomsById = new Map(rooms.map((room) => [room.id, room]));
             const buildingsById = new Map(
                 buildings.map((building) => [building.id, building])
+            );
+            const participantsByUserId = new Map(
+                participants.map((participant) => [
+                    participant.user_id,
+                    participant,
+                ])
             );
 
             res.json(
@@ -1109,11 +1194,15 @@ router.get(
                         ? buildingsById.get(room.housing_building_id)
                         : null;
 
-                    return {
-                        ...preference,
+                    return toRoomPreferencePayload(
+                        {
+                            ...preference,
+                            status: preference.status || 'active',
+                        },
                         room,
                         building,
-                    };
+                        participantsByUserId.get(preference.user_id)
+                    );
                 })
             );
         } catch (error) {
@@ -1158,9 +1247,9 @@ router.put(
             const items: RoomPreferenceInput[] = Array.isArray(req.body.items)
                 ? req.body.items
                 : [];
-            if (items.length > 20) {
+            if (items.length > MAX_ACTIVE_ROOM_PREFERENCES) {
                 res.status(400).json({
-                    message: 'Preference lists can include up to 20 rooms',
+                    message: 'You can rank up to 2 rooms',
                 });
                 return;
             }
@@ -1195,27 +1284,54 @@ router.put(
                 return;
             }
 
-            const roomCount = await HousingRooms.countDocuments({
-                id: { $in: [...uniqueRoomIds] },
+            const activePreferences = await RoomPreferences.find({
+                user_id: userId,
+                housing_room_id: { $in: [...uniqueRoomIds] },
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
             });
-            if (roomCount !== uniqueRoomIds.size) {
-                res.status(404).json({ message: 'One or more rooms were not found' });
+            if (activePreferences.length !== uniqueRoomIds.size) {
+                res.status(403).json({
+                    message: 'You can only save rooms you currently hold',
+                });
                 return;
             }
 
-            await RoomPreferences.deleteMany({ user_id: userId });
-            if (normalizedItems.length > 0) {
-                await RoomPreferences.insertMany(
-                    normalizedItems.map((item) => ({
-                        user_id: userId,
-                        user_email: userEmail,
-                        user_name: getSessionUserName(sessionUser),
-                        housing_room_id: item.housing_room_id,
-                        rank: item.rank,
-                        notes: item.notes,
-                    }))
-                );
-            }
+            await RoomPreferences.deleteMany({
+                user_id: userId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+                housing_room_id: { $nin: [...uniqueRoomIds] },
+            });
+
+            await Promise.all(
+                activePreferences.map((preference, index) => {
+                    preference.rank = 1000 + index;
+                    preference.status = 'active';
+                    return preference.save();
+                })
+            );
+
+            await Promise.all(
+                normalizedItems.map((item) =>
+                    RoomPreferences.findOneAndUpdate(
+                        {
+                            user_id: userId,
+                            housing_room_id: item.housing_room_id,
+                            $or: [
+                                { status: 'active' },
+                                { status: { $exists: false } },
+                            ],
+                        },
+                        {
+                            user_email: userEmail,
+                            user_name: getSessionUserName(sessionUser),
+                            rank: item.rank,
+                            notes: item.notes,
+                            status: 'active',
+                        },
+                        { runValidators: true }
+                    )
+                )
+            );
 
             res.json({ message: 'Room preferences saved' });
         } catch (error) {
@@ -1272,6 +1388,7 @@ router.post(
             const existingPreference = await RoomPreferences.findOne({
                 user_id: userId,
                 housing_room_id: roomId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
             });
             if (existingPreference) {
                 res.json({
@@ -1283,13 +1400,74 @@ router.post(
 
             const preferenceCount = await RoomPreferences.countDocuments({
                 user_id: userId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
             });
-            if (preferenceCount >= 20) {
+            if (preferenceCount >= MAX_ACTIVE_ROOM_PREFERENCES) {
                 res.status(400).json({
-                    message: 'Preference lists can include up to 20 rooms',
+                    message: 'You can rank up to 2 rooms',
                 });
                 return;
             }
+
+            const challengerPriority = await getRoomDrawParticipant(req);
+            if (!challengerPriority) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room ranking',
+                });
+                return;
+            }
+
+            const currentRoomHolder = await RoomPreferences.findOne({
+                housing_room_id: roomId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+            });
+            let bumpedPreference = null;
+
+            if (
+                currentRoomHolder &&
+                currentRoomHolder.user_id !== userId
+            ) {
+                const incumbentPriority = await RoomDrawParticipants.findOne({
+                    user_id: currentRoomHolder.user_id,
+                }).lean();
+
+                if (
+                    incumbentPriority &&
+                    !isBetterRoomDrawPriority(
+                        challengerPriority,
+                        incumbentPriority,
+                        room.eligibleYear
+                    )
+                ) {
+                    res.status(409).json({
+                        message:
+                            'Room is already ranked by someone with better priority',
+                    });
+                    return;
+                }
+            }
+
+            if (currentRoomHolder && currentRoomHolder.user_id !== userId) {
+                const bumpedPreferenceCount = await RoomPreferences.countDocuments({
+                    user_id: currentRoomHolder.user_id,
+                    status: 'bumped',
+                });
+                currentRoomHolder.status = 'bumped';
+                currentRoomHolder.rank = 1000 + bumpedPreferenceCount;
+                currentRoomHolder.bumpedByUserId = userId;
+                currentRoomHolder.bumpedByEmail = userEmail;
+                currentRoomHolder.bumpedByName = getSessionUserName(sessionUser);
+                currentRoomHolder.bumpedByClassYear = challengerPriority.classYear;
+                currentRoomHolder.bumpedByDrawDate = challengerPriority.drawDate;
+                currentRoomHolder.bumpedAt = new Date();
+                bumpedPreference = await currentRoomHolder.save();
+            }
+
+            await RoomPreferences.deleteOne({
+                user_id: userId,
+                housing_room_id: roomId,
+                status: 'bumped',
+            });
 
             const preference = await RoomPreferences.create({
                 user_id: userId,
@@ -1297,11 +1475,15 @@ router.post(
                 user_name: getSessionUserName(sessionUser),
                 housing_room_id: roomId,
                 rank: preferenceCount + 1,
+                status: 'active',
             });
 
             res.status(201).json({
-                message: 'Room added to preferences',
+                message: bumpedPreference
+                    ? 'Room added to preferences and previous rank owner was bumped'
+                    : 'Room added to preferences',
                 preference,
+                bumpedPreference,
             });
         } catch (error) {
             res.status(500).json({ message: 'Server error' });
@@ -1350,10 +1532,12 @@ router.delete(
             await RoomPreferences.deleteOne({
                 user_id: userId,
                 housing_room_id: roomId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
             });
 
             const remainingPreferences = await RoomPreferences.find({
                 user_id: userId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
             }).sort({ rank: 1 });
 
             await Promise.all(
@@ -1381,6 +1565,14 @@ router.get(
     async (_req: Request, res: Response) => {
         try {
             const summary = await RoomPreferences.aggregate([
+                {
+                    $match: {
+                        $or: [
+                            { status: 'active' },
+                            { status: { $exists: false } },
+                        ],
+                    },
+                },
                 {
                     $group: {
                         _id: '$housing_room_id',
@@ -1421,6 +1613,88 @@ router.get(
                     };
                 })
             );
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   GET /api/campus/housing/:building/room-preferences/holders
+ * @desc    Get active ranked room holders for a building
+ * @access  isAuthenticated
+ */
+router.get(
+    '/:building/room-preferences/holders',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const buildingId = parseInt(getParam(req.params.building), 10);
+            if (isNaN(buildingId)) {
+                res.status(400).json({ message: 'Invalid building ID format' });
+                return;
+            }
+
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            if (await requiresRoomDrawPriority(req)) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room ranking',
+                });
+                return;
+            }
+
+            const rooms = await HousingRooms.find({
+                housing_building_id: buildingId,
+            }).lean();
+            const roomIds = rooms.map((room) => room.id);
+            const preferences = await RoomPreferences.find({
+                housing_room_id: { $in: roomIds },
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+            }).lean();
+            const participants = await RoomDrawParticipants.find({
+                user_id: { $in: preferences.map((preference) => preference.user_id) },
+            }).lean();
+            const participantsByUserId = new Map(
+                participants.map((participant) => [
+                    participant.user_id,
+                    participant,
+                ])
+            );
+
+            const holders = preferences.reduce<
+                Record<
+                    number,
+                    {
+                        initials: string;
+                        name?: string;
+                        classYear?: number;
+                        drawDate?: Date;
+                        isOwner: boolean;
+                    }
+                >
+            >((acc, preference) => {
+                const priority = participantsByUserId.get(preference.user_id);
+                acc[preference.housing_room_id] = {
+                    initials: getInitials(
+                        preference.user_name,
+                        preference.user_email
+                    ),
+                    name: preference.user_name,
+                    classYear: priority?.classYear,
+                    drawDate: priority?.drawDate,
+                    isOwner: preference.user_id === req.session.user?.id,
+                };
+                return acc;
+            }, {});
+
+            res.json(holders);
         } catch (error) {
             res.status(500).json({ message: 'Server error' });
         }

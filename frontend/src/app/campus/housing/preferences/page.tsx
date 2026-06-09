@@ -225,6 +225,9 @@ export default function RoomPreferencesPage() {
         setSaving(true);
         setMessage(null);
         setError(null);
+        const activePreferences = preferences.filter(
+            (preference) => preference.status !== 'bumped'
+        );
 
         try {
             const response = await fetch(
@@ -236,7 +239,7 @@ export default function RoomPreferencesPage() {
                     },
                     credentials: 'include',
                     body: JSON.stringify({
-                        items: preferences.map((preference) => ({
+                        items: activePreferences.map((preference) => ({
                             housing_room_id: preference.housing_room_id,
                             notes: preference.notes || '',
                         })),
@@ -274,6 +277,13 @@ export default function RoomPreferencesPage() {
     if (!user) {
         return <LoginRequired />;
     }
+
+    const activePreferences = preferences.filter(
+        (preference) => preference.status !== 'bumped'
+    );
+    const bumpedPreferences = preferences.filter(
+        (preference) => preference.status === 'bumped'
+    );
 
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
@@ -379,7 +389,8 @@ export default function RoomPreferencesPage() {
                             Save your draw priority to view or edit your ranking.
                         </p>
                     </div>
-                ) : preferences.length === 0 ? (
+                ) : activePreferences.length === 0 &&
+                  bumpedPreferences.length === 0 ? (
                     <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">
                         <p className="text-lg text-sas-black/75">
                             No rooms ranked yet.
@@ -393,8 +404,15 @@ export default function RoomPreferencesPage() {
                     </div>
                 ) : (
                     <>
-                        <div className="divide-y divide-sas-line rounded-md border border-sas-line bg-sas-white">
-                            {preferences.map((preference, index) => (
+                        {activePreferences.length > 0 && (
+                            <div className="mb-4 rounded-md border border-sas-line bg-sas-white px-4 py-3 text-sm text-sas-black/65">
+                                You can hold up to 2 ranked rooms. A student with
+                                better room priority can bump a held room.
+                            </div>
+                        )}
+                        {activePreferences.length > 0 && (
+                            <div className="divide-y divide-sas-line rounded-md border border-sas-line bg-sas-white">
+                                {activePreferences.map((preference, index) => (
                                 <div
                                     key={preference.housing_room_id}
                                     className="grid gap-4 p-4 sm:grid-cols-[4rem_1fr_auto]"
@@ -414,6 +432,23 @@ export default function RoomPreferencesPage() {
                                                 preference.room?.occupancy_type
                                             )}
                                         </p>
+                                        {preference.rankOwner && (
+                                            <p className="mt-1 text-xs text-sas-black/55">
+                                                Held by{' '}
+                                                {preference.rankOwner.initials}
+                                                {preference.rankOwner.classYear
+                                                    ? ` - Year ${preference.rankOwner.classYear}`
+                                                    : ''}
+                                                {preference.rankOwner.drawDate
+                                                    ? ` - ${new Date(
+                                                          preference.rankOwner.drawDate
+                                                      ).toLocaleString(undefined, {
+                                                          dateStyle: 'medium',
+                                                          timeStyle: 'short',
+                                                      })}`
+                                                    : ''}
+                                            </p>
+                                        )}
                                         <label
                                             htmlFor={`preference-notes-${preference.housing_room_id}`}
                                             className="mt-3 block text-sm font-medium text-sas-black/75"
@@ -450,7 +485,8 @@ export default function RoomPreferencesPage() {
                                                 movePreference(index, 1)
                                             }
                                             disabled={
-                                                index === preferences.length - 1
+                                                index ===
+                                                activePreferences.length - 1
                                             }
                                             className="rounded-md border border-sas-line px-3 py-2 text-sm font-medium text-sas-black hover:border-sas-green hover:text-sas-green disabled:opacity-40"
                                         >
@@ -467,10 +503,12 @@ export default function RoomPreferencesPage() {
                                         </button>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
 
-                        <div className="mt-6 flex flex-wrap gap-3">
+                        {activePreferences.length > 0 && (
+                            <div className="mt-6 flex flex-wrap gap-3">
                             <button
                                 type="button"
                                 onClick={savePreferences}
@@ -485,7 +523,52 @@ export default function RoomPreferencesPage() {
                             >
                                 Add More Rooms
                             </Link>
-                        </div>
+                            </div>
+                        )}
+
+                        {bumpedPreferences.length > 0 && (
+                            <div className="mt-8">
+                                <h2 className="font-display text-xl font-semibold text-sas-black">
+                                    Bumped Rankings
+                                </h2>
+                                <div className="mt-3 divide-y divide-sas-line rounded-md border border-amber-200 bg-amber-50">
+                                    {bumpedPreferences.map((preference) => (
+                                        <div
+                                            key={`${preference.housing_room_id}-bumped`}
+                                            className="p-4"
+                                        >
+                                            <h3 className="font-display text-lg font-semibold text-sas-black">
+                                                {preference.building?.name ||
+                                                    'Unknown Building'}{' '}
+                                                {preference.room?.room_number ||
+                                                    'Unknown Room'}
+                                            </h3>
+                                            <p className="mt-1 text-sm text-sas-black/65">
+                                                Bumped by{' '}
+                                                {preference.bumpedBy?.initials ||
+                                                    'another student'}
+                                                {preference.bumpedBy?.classYear
+                                                    ? ` - Year ${preference.bumpedBy.classYear}`
+                                                    : ''}
+                                                {preference.bumpedBy?.drawDate
+                                                    ? ` - ${new Date(
+                                                          preference.bumpedBy.drawDate
+                                                      ).toLocaleString(undefined, {
+                                                          dateStyle: 'medium',
+                                                          timeStyle: 'short',
+                                                      })}`
+                                                    : ''}
+                                            </p>
+                                            {preference.notes && (
+                                                <p className="mt-3 whitespace-pre-wrap rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-sas-black/70">
+                                                    {preference.notes}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </>
                 )}
             </main>
