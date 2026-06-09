@@ -836,6 +836,7 @@ export default function DynamicRooms() {
                                 isInPreferenceRanking={preferenceRoomIds.has(
                                     room.id
                                 )}
+                                nextPreferenceRank={preferenceRoomIds.size + 1}
                                 onAddPreference={addRoomPreference}
                                 onRemovePreference={removeRoomPreference}
                                 onRoomDrawStatusChange={updateRoomDrawStatus}

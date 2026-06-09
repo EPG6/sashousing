@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Building, Room } from '@/types';
 import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 type BuildingSearchDoc = Building & {
@@ -128,6 +128,7 @@ const getRoomFieldValue = (
 };
 
 export default function HousingDataAdminPage() {
+    const router = useRouter();
     const { user, loading: authLoading } = useAuth();
     const [buildings, setBuildings] = useState<BuildingSearchDoc[]>([]);
     const [buildingSearchQuery, setBuildingSearchQuery] = useState('');
@@ -154,6 +155,7 @@ export default function HousingDataAdminPage() {
     const [pendingBuildingId, setPendingBuildingId] = useState<number | null>(
         null
     );
+    const [pendingHref, setPendingHref] = useState<string | null>(null);
 
     const selectedBuilding = useMemo(
         () =>
@@ -194,6 +196,40 @@ export default function HousingDataAdminPage() {
     }, [buildings, buildingSearchTokens]);
 
     const hasUnsavedEdits = editingBuilding || editingRoomId !== null;
+
+    useEffect(() => {
+        if (!hasUnsavedEdits) {
+            return;
+        }
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [hasUnsavedEdits]);
+
+    const navigateWithUnsavedCheck = (href: string) => {
+        if (hasUnsavedEdits) {
+            setPendingHref(href);
+            return;
+        }
+
+        router.push(href);
+    };
+
+    const discardAndNavigate = () => {
+        setEditingBuilding(false);
+        setEditingRoomId(null);
+        if (pendingHref) {
+            router.push(pendingHref);
+            setPendingHref(null);
+        }
+    };
 
     const selectBuilding = (buildingId: number) => {
         if (buildingId === selectedBuildingId) {
@@ -554,15 +590,44 @@ export default function HousingDataAdminPage() {
                 Switching buildings will discard the edits currently on this
                 page.
             </AppModal>
+            <AppModal
+                isOpen={pendingHref !== null}
+                title="Discard Unsaved Edits?"
+                onClose={() => setPendingHref(null)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingHref(null)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Keep Editing
+                        </button>
+                        <button
+                            type="button"
+                            onClick={discardAndNavigate}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            Discard Edits
+                        </button>
+                    </>
+                }
+            >
+                Leaving this page will discard the edits currently on this page.
+            </AppModal>
             <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-                <Link
-                    href="/campus/housing"
+                <button
+                    type="button"
+                    onClick={() => navigateWithUnsavedCheck('/campus/housing')}
                     className="mb-6 inline-flex items-center rounded-md border border-sas-line bg-sas-white px-4 py-2 text-sm font-medium text-sas-black shadow-sm hover:border-sas-green hover:text-sas-green"
                 >
                     Back to Housing
-                </Link>
+                </button>
 
-                <AdminTabs activeTab="housing-data" />
+                <AdminTabs
+                    activeTab="housing-data"
+                    onNavigate={navigateWithUnsavedCheck}
+                />
 
                 <div className="mb-8 border-b border-sas-line pb-5">
                     <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">

@@ -3,13 +3,14 @@
 import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
+import AppModal from '@/components/AppModal';
 import { getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
 import { RoomDrawPriority, RoomDrawSettings, RoomPreference } from '@/types';
 import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 const toDateTimeInputValue = (value?: string | Date | null) => {
     if (!value) {
@@ -28,9 +29,23 @@ const toDateTimeInputValue = (value?: string | Date | null) => {
 const toIsoDateValue = (value: string) =>
     value ? new Date(value).toISOString() : '';
 
+const getActivePreferences = (preferences: RoomPreference[]) =>
+    preferences.filter((preference) => preference.status !== 'bumped');
+
+const serializeActivePreferences = (preferences: RoomPreference[]) =>
+    JSON.stringify(
+        getActivePreferences(preferences).map((preference, index) => ({
+            housing_room_id: preference.housing_room_id,
+            rank: index + 1,
+            notes: preference.notes || '',
+        }))
+    );
+
 export default function RoomPreferencesPage() {
+    const router = useRouter();
     const { user, loading: authLoading } = useAuth();
     const [preferences, setPreferences] = useState<RoomPreference[]>([]);
+    const [savedPreferences, setSavedPreferences] = useState<RoomPreference[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [savingPriority, setSavingPriority] = useState(false);
@@ -41,6 +56,13 @@ export default function RoomPreferencesPage() {
         classYear: '',
         drawDate: '',
     });
+    const [savedPriorityForm, setSavedPriorityForm] = useState({
+        classYear: '',
+        drawDate: '',
+    });
+    const [editingPriority, setEditingPriority] = useState(false);
+    const [editingRanking, setEditingRanking] = useState(false);
+    const [pendingHref, setPendingHref] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -79,18 +101,20 @@ export default function RoomPreferencesPage() {
                           requiresPriority: boolean;
                       })
                     : null;
-                setRoomDrawRequiresPriority(
-                    Boolean(priorityData?.requiresPriority)
-                );
-                setPriorityForm({
+                const requiresPriority = Boolean(priorityData?.requiresPriority);
+                setRoomDrawRequiresPriority(requiresPriority);
+                setEditingPriority(requiresPriority);
+                const nextPriorityForm = {
                     classYear: priorityData?.priority?.classYear
                         ? String(priorityData.priority.classYear)
                         : '',
                     drawDate: toDateTimeInputValue(
                         priorityData?.priority?.drawDate
                     ),
-                });
-                if (priorityData?.requiresPriority) {
+                };
+                setPriorityForm(nextPriorityForm);
+                setSavedPriorityForm(nextPriorityForm);
+                if (requiresPriority) {
                     return;
                 }
 
@@ -103,7 +127,9 @@ export default function RoomPreferencesPage() {
                     throw new Error('Failed to load room preferences');
                 }
 
-                setPreferences(await response.json());
+                const preferencesData = await response.json();
+                setPreferences(preferencesData);
+                setSavedPreferences(preferencesData);
             } catch (error) {
                 console.error('Room preference load error:', error);
                 setError('Could not load your room ranking.');
@@ -130,7 +156,67 @@ export default function RoomPreferencesPage() {
             );
         }
 
-        setPreferences(await response.json());
+        const preferencesData = await response.json();
+        setPreferences(preferencesData);
+        setSavedPreferences(preferencesData);
+    };
+
+    const activePreferences = useMemo(
+        () => getActivePreferences(preferences),
+        [preferences]
+    );
+    const bumpedPreferences = useMemo(
+        () => preferences.filter((preference) => preference.status === 'bumped'),
+        [preferences]
+    );
+    const rankingHasChanges = useMemo(
+        () =>
+            serializeActivePreferences(preferences) !==
+            serializeActivePreferences(savedPreferences),
+        [preferences, savedPreferences]
+    );
+    const priorityHasChanges =
+        priorityForm.classYear !== savedPriorityForm.classYear ||
+        priorityForm.drawDate !== savedPriorityForm.drawDate;
+    const hasUnsavedEdits =
+        (editingRanking && rankingHasChanges) ||
+        (editingPriority && priorityHasChanges);
+
+    useEffect(() => {
+        if (!hasUnsavedEdits) {
+            return;
+        }
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [hasUnsavedEdits]);
+
+    const navigateWithUnsavedCheck = (href: string) => {
+        if (hasUnsavedEdits) {
+            setPendingHref(href);
+            return;
+        }
+
+        router.push(href);
+    };
+
+    const discardUnsavedEdits = () => {
+        setPreferences(savedPreferences);
+        setPriorityForm(savedPriorityForm);
+        setEditingRanking(false);
+        setEditingPriority(roomDrawRequiresPriority);
+
+        if (pendingHref) {
+            router.push(pendingHref);
+            setPendingHref(null);
+        }
     };
 
     const saveRoomDrawPriority = async (
@@ -165,7 +251,13 @@ export default function RoomPreferencesPage() {
                 );
             }
 
+            const nextPriorityForm = {
+                classYear: priorityForm.classYear,
+                drawDate: priorityForm.drawDate,
+            };
             setRoomDrawRequiresPriority(false);
+            setSavedPriorityForm(nextPriorityForm);
+            setEditingPriority(false);
             setMessage('Draw priority saved.');
             await loadPreferences();
         } catch (error) {
@@ -178,6 +270,13 @@ export default function RoomPreferencesPage() {
         } finally {
             setSavingPriority(false);
         }
+    };
+
+    const cancelRoomDrawPriorityEdit = () => {
+        setPriorityForm(savedPriorityForm);
+        setEditingPriority(roomDrawRequiresPriority);
+        setMessage(null);
+        setError(null);
     };
 
     const movePreference = (index: number, direction: -1 | 1) => {
@@ -225,9 +324,7 @@ export default function RoomPreferencesPage() {
         setSaving(true);
         setMessage(null);
         setError(null);
-        const activePreferences = preferences.filter(
-            (preference) => preference.status !== 'bumped'
-        );
+        const activePreferences = getActivePreferences(preferences);
 
         try {
             const response = await fetch(
@@ -256,6 +353,8 @@ export default function RoomPreferencesPage() {
                 );
             }
 
+            setSavedPreferences(preferences);
+            setEditingRanking(false);
             setMessage('Room ranking saved.');
         } catch (error) {
             console.error('Room preference save error:', error);
@@ -270,6 +369,13 @@ export default function RoomPreferencesPage() {
         }
     };
 
+    const cancelRankingEdit = () => {
+        setPreferences(savedPreferences);
+        setEditingRanking(false);
+        setMessage(null);
+        setError(null);
+    };
+
     if (authLoading || loading) {
         return <Loading />;
     }
@@ -278,23 +384,42 @@ export default function RoomPreferencesPage() {
         return <LoginRequired />;
     }
 
-    const activePreferences = preferences.filter(
-        (preference) => preference.status !== 'bumped'
-    );
-    const bumpedPreferences = preferences.filter(
-        (preference) => preference.status === 'bumped'
-    );
-
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
             <SiteHeader />
+            <AppModal
+                isOpen={pendingHref !== null}
+                title="Discard Unsaved Edits?"
+                onClose={() => setPendingHref(null)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingHref(null)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Keep Editing
+                        </button>
+                        <button
+                            type="button"
+                            onClick={discardUnsavedEdits}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            Discard Edits
+                        </button>
+                    </>
+                }
+            >
+                Leaving this page will discard your unsaved changes.
+            </AppModal>
             <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-                <Link
-                    href="/campus/housing"
+                <button
+                    type="button"
+                    onClick={() => navigateWithUnsavedCheck('/campus/housing')}
                     className="mb-6 inline-flex rounded-md border border-sas-line bg-sas-white px-4 py-2 text-sm font-medium text-sas-black shadow-sm hover:border-sas-green hover:text-sas-green"
                 >
                     Back to Housing
-                </Link>
+                </button>
 
                 <div className="mb-8 border-b border-sas-line pb-5">
                     <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">
@@ -335,6 +460,7 @@ export default function RoomPreferencesPage() {
                                 </span>
                                 <select
                                     value={priorityForm.classYear}
+                                    disabled={!editingPriority}
                                     onChange={(event) =>
                                         setPriorityForm((current) => ({
                                             ...current,
@@ -357,6 +483,7 @@ export default function RoomPreferencesPage() {
                                 <input
                                     type="datetime-local"
                                     value={priorityForm.drawDate}
+                                    disabled={!editingPriority}
                                     onChange={(event) =>
                                         setPriorityForm((current) => ({
                                             ...current,
@@ -367,13 +494,42 @@ export default function RoomPreferencesPage() {
                                 />
                             </label>
                         </div>
-                        <button
-                            type="submit"
-                            disabled={savingPriority}
-                            className="mt-5 rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
-                        >
-                            {savingPriority ? 'Saving...' : 'Save Priority'}
-                        </button>
+                        <div className="mt-5 flex flex-wrap gap-3">
+                            {editingPriority ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={cancelRoomDrawPriorityEdit}
+                                        disabled={
+                                            savingPriority ||
+                                            roomDrawRequiresPriority
+                                        }
+                                        className="rounded-md border border-sas-green px-5 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={savingPriority}
+                                        className="rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                                    >
+                                        {savingPriority
+                                            ? 'Saving...'
+                                            : priorityHasChanges
+                                              ? 'Save Changes'
+                                              : 'Save Priority'}
+                                    </button>
+                                </>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingPriority(true)}
+                                    className="rounded-md border border-sas-green px-5 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                                >
+                                    Edit Draw Time
+                                </button>
+                            )}
+                        </div>
                     </form>
                 )}
 
@@ -395,12 +551,15 @@ export default function RoomPreferencesPage() {
                         <p className="text-lg text-sas-black/75">
                             No rooms ranked yet.
                         </p>
-                        <Link
-                            href="/campus/housing"
+                        <button
+                            type="button"
+                            onClick={() =>
+                                navigateWithUnsavedCheck('/campus/housing')
+                            }
                             className="mt-4 inline-flex rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
                         >
                             Browse Rooms
-                        </Link>
+                        </button>
                     </div>
                 ) : (
                     <>
@@ -458,6 +617,7 @@ export default function RoomPreferencesPage() {
                                         <textarea
                                             id={`preference-notes-${preference.housing_room_id}`}
                                             value={preference.notes || ''}
+                                            disabled={!editingRanking}
                                             onChange={(event) =>
                                                 updateNotes(
                                                     index,
@@ -465,7 +625,7 @@ export default function RoomPreferencesPage() {
                                                 )
                                             }
                                             rows={2}
-                                            className="mt-1 w-full rounded-md border border-sas-line px-3 py-2 text-sm focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                            className="mt-1 w-full rounded-md border border-sas-line px-3 py-2 text-sm disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
                                         />
                                     </div>
                                     <div className="flex flex-wrap items-start gap-2 sm:justify-end">
@@ -474,7 +634,9 @@ export default function RoomPreferencesPage() {
                                             onClick={() =>
                                                 movePreference(index, -1)
                                             }
-                                            disabled={index === 0}
+                                            disabled={
+                                                !editingRanking || index === 0
+                                            }
                                             className="rounded-md border border-sas-line px-3 py-2 text-sm font-medium text-sas-black hover:border-sas-green hover:text-sas-green disabled:opacity-40"
                                         >
                                             Up
@@ -485,6 +647,7 @@ export default function RoomPreferencesPage() {
                                                 movePreference(index, 1)
                                             }
                                             disabled={
+                                                !editingRanking ||
                                                 index ===
                                                 activePreferences.length - 1
                                             }
@@ -497,7 +660,8 @@ export default function RoomPreferencesPage() {
                                             onClick={() =>
                                                 removePreference(index)
                                             }
-                                            className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                                            disabled={!editingRanking}
+                                            className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-40"
                                         >
                                             Remove
                                         </button>
@@ -509,20 +673,51 @@ export default function RoomPreferencesPage() {
 
                         {activePreferences.length > 0 && (
                             <div className="mt-6 flex flex-wrap gap-3">
-                            <button
-                                type="button"
-                                onClick={savePreferences}
-                                disabled={saving}
-                                className="rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
-                            >
-                                {saving ? 'Saving...' : 'Save Ranking'}
-                            </button>
-                            <Link
-                                href="/campus/housing"
-                                className="rounded-md border border-sas-green px-5 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
-                            >
-                                Add More Rooms
-                            </Link>
+                                {editingRanking ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={cancelRankingEdit}
+                                            disabled={saving}
+                                            className="rounded-md border border-sas-green px-5 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={savePreferences}
+                                            disabled={
+                                                saving || !rankingHasChanges
+                                            }
+                                            className="rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                                        >
+                                            {saving
+                                                ? 'Saving...'
+                                                : rankingHasChanges
+                                                  ? 'Save Changes'
+                                                  : 'Save Ranking'}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingRanking(true)}
+                                        className="rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                                    >
+                                        Edit Ranking
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        navigateWithUnsavedCheck(
+                                            '/campus/housing'
+                                        )
+                                    }
+                                    className="rounded-md border border-sas-green px-5 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                                >
+                                    Add More Rooms
+                                </button>
                             </div>
                         )}
 

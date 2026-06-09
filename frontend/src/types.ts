@@ -72,6 +72,7 @@ export interface RoomDrawStatusResponse extends RoomDrawSettings {
 export interface RoomPreferenceHolder {
     initials: string;
     name?: string;
+    rank?: number;
     classYear?: number;
     drawDate?: string;
     isOwner?: boolean;
@@ -117,6 +118,7 @@ export interface RoomCardProps {
     roomTakenDisabledMessage?: string;
     canManagePreferences?: boolean;
     isInPreferenceRanking?: boolean;
+    nextPreferenceRank?: number;
     onAddPreference?: (roomId: number) => Promise<void>;
     onRemovePreference?: (roomId: number) => Promise<void>;
     onRoomDrawStatusChange?: (

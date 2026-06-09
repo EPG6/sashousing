@@ -237,6 +237,7 @@ const toRoomPreferencePayload = (
     rankOwner: {
         initials: getInitials(preference.user_name, preference.user_email),
         name: preference.user_name,
+        rank: preference.rank,
         classYear: ownerPriority?.classYear,
         drawDate: ownerPriority?.drawDate,
     },
@@ -1379,33 +1380,11 @@ router.post(
                 return;
             }
 
-            const room = await HousingRooms.findOne({ id: roomId });
+            const room = (await HousingRooms.findOne({ id: roomId }).lean()) as {
+                eligibleYear?: number | null;
+            } | null;
             if (!room) {
                 res.status(404).json({ message: 'Room not found' });
-                return;
-            }
-
-            const existingPreference = await RoomPreferences.findOne({
-                user_id: userId,
-                housing_room_id: roomId,
-                $or: [{ status: 'active' }, { status: { $exists: false } }],
-            });
-            if (existingPreference) {
-                res.json({
-                    message: 'Room is already in your preferences',
-                    preference: existingPreference,
-                });
-                return;
-            }
-
-            const preferenceCount = await RoomPreferences.countDocuments({
-                user_id: userId,
-                $or: [{ status: 'active' }, { status: { $exists: false } }],
-            });
-            if (preferenceCount >= MAX_ACTIVE_ROOM_PREFERENCES) {
-                res.status(400).json({
-                    message: 'You can rank up to 2 rooms',
-                });
                 return;
             }
 
@@ -1417,27 +1396,132 @@ router.post(
                 return;
             }
 
-            const currentRoomHolder = await RoomPreferences.findOne({
-                housing_room_id: roomId,
-                $or: [{ status: 'active' }, { status: { $exists: false } }],
-            });
+            const session = await mongoose.startSession();
+            let preference = null;
             let bumpedPreference = null;
+            let alreadyInPreferences = false;
 
-            if (
-                currentRoomHolder &&
-                currentRoomHolder.user_id !== userId
-            ) {
-                const incumbentPriority = await RoomDrawParticipants.findOne({
-                    user_id: currentRoomHolder.user_id,
-                }).lean();
+            try {
+                await session.withTransaction(async () => {
+                    const existingPreference = await RoomPreferences.findOne({
+                        user_id: userId,
+                        housing_room_id: roomId,
+                        $or: [
+                            { status: 'active' },
+                            { status: { $exists: false } },
+                        ],
+                    }).session(session);
+                    if (existingPreference) {
+                        preference = existingPreference;
+                        alreadyInPreferences = true;
+                        return;
+                    }
+
+                    const preferenceCount = await RoomPreferences.countDocuments({
+                        user_id: userId,
+                        $or: [
+                            { status: 'active' },
+                            { status: { $exists: false } },
+                        ],
+                    }).session(session);
+                    if (preferenceCount >= MAX_ACTIVE_ROOM_PREFERENCES) {
+                        throw new Error('MAX_ACTIVE_ROOM_PREFERENCES');
+                    }
+                    const challengerRank = preferenceCount + 1;
+
+                    const currentRoomHolder = await RoomPreferences.findOne({
+                        housing_room_id: roomId,
+                        $or: [
+                            { status: 'active' },
+                            { status: { $exists: false } },
+                        ],
+                    }).session(session);
+
+                    if (
+                        currentRoomHolder &&
+                        currentRoomHolder.user_id !== userId
+                    ) {
+                        if (currentRoomHolder.rank !== challengerRank) {
+                            throw new Error('ROOM_RANK_CONFLICT');
+                        }
+
+                        const incumbentPriority =
+                            await RoomDrawParticipants.findOne({
+                                user_id: currentRoomHolder.user_id,
+                            })
+                                .session(session)
+                                .lean();
+
+                        if (
+                            incumbentPriority &&
+                            !isBetterRoomDrawPriority(
+                                challengerPriority,
+                                incumbentPriority,
+                                room.eligibleYear
+                            )
+                        ) {
+                            throw new Error('ROOM_PRIORITY_CONFLICT');
+                        }
+
+                        const bumpedPreferenceCount =
+                            await RoomPreferences.countDocuments({
+                                user_id: currentRoomHolder.user_id,
+                                status: 'bumped',
+                            }).session(session);
+                        currentRoomHolder.status = 'bumped';
+                        currentRoomHolder.rank = 1000 + bumpedPreferenceCount;
+                        currentRoomHolder.bumpedByUserId = userId;
+                        currentRoomHolder.bumpedByEmail = userEmail;
+                        currentRoomHolder.bumpedByName =
+                            getSessionUserName(sessionUser);
+                        currentRoomHolder.bumpedByClassYear =
+                            challengerPriority.classYear;
+                        currentRoomHolder.bumpedByDrawDate =
+                            challengerPriority.drawDate;
+                        currentRoomHolder.bumpedAt = new Date();
+                        bumpedPreference = await currentRoomHolder.save({
+                            session,
+                        });
+                    }
+
+                    await RoomPreferences.deleteOne(
+                        {
+                            user_id: userId,
+                            housing_room_id: roomId,
+                            status: 'bumped',
+                        },
+                        { session }
+                    );
+
+                    const [createdPreference] = await RoomPreferences.create(
+                        [
+                            {
+                                user_id: userId,
+                                user_email: userEmail,
+                                user_name: getSessionUserName(sessionUser),
+                                housing_room_id: roomId,
+                                rank: challengerRank,
+                                status: 'active',
+                            },
+                        ],
+                        { session }
+                    );
+                    preference = createdPreference;
+                });
+            } catch (error) {
+                if (
+                    error instanceof Error &&
+                    error.message === 'MAX_ACTIVE_ROOM_PREFERENCES'
+                ) {
+                    res.status(400).json({
+                        message: 'You can rank up to 2 rooms',
+                    });
+                    return;
+                }
 
                 if (
-                    incumbentPriority &&
-                    !isBetterRoomDrawPriority(
-                        challengerPriority,
-                        incumbentPriority,
-                        room.eligibleYear
-                    )
+                    error instanceof Error &&
+                    error.message === 'ROOM_PRIORITY_CONFLICT'
                 ) {
                     res.status(409).json({
                         message:
@@ -1445,42 +1529,41 @@ router.post(
                     });
                     return;
                 }
+
+                if (
+                    error instanceof Error &&
+                    error.message === 'ROOM_RANK_CONFLICT'
+                ) {
+                    res.status(409).json({
+                        message:
+                            'Room is ranked at a different position by another student',
+                    });
+                    return;
+                }
+
+                if (
+                    typeof error === 'object' &&
+                    error !== null &&
+                    'code' in error &&
+                    error.code === 11000
+                ) {
+                    res.status(409).json({
+                        message:
+                            'Room ranking changed while you were updating. Please try again.',
+                    });
+                    return;
+                }
+
+                throw error;
+            } finally {
+                await session.endSession();
             }
 
-            if (currentRoomHolder && currentRoomHolder.user_id !== userId) {
-                const bumpedPreferenceCount = await RoomPreferences.countDocuments({
-                    user_id: currentRoomHolder.user_id,
-                    status: 'bumped',
-                });
-                currentRoomHolder.status = 'bumped';
-                currentRoomHolder.rank = 1000 + bumpedPreferenceCount;
-                currentRoomHolder.bumpedByUserId = userId;
-                currentRoomHolder.bumpedByEmail = userEmail;
-                currentRoomHolder.bumpedByName = getSessionUserName(sessionUser);
-                currentRoomHolder.bumpedByClassYear = challengerPriority.classYear;
-                currentRoomHolder.bumpedByDrawDate = challengerPriority.drawDate;
-                currentRoomHolder.bumpedAt = new Date();
-                bumpedPreference = await currentRoomHolder.save();
-            }
-
-            await RoomPreferences.deleteOne({
-                user_id: userId,
-                housing_room_id: roomId,
-                status: 'bumped',
-            });
-
-            const preference = await RoomPreferences.create({
-                user_id: userId,
-                user_email: userEmail,
-                user_name: getSessionUserName(sessionUser),
-                housing_room_id: roomId,
-                rank: preferenceCount + 1,
-                status: 'active',
-            });
-
-            res.status(201).json({
+            res.status(alreadyInPreferences ? 200 : 201).json({
                 message: bumpedPreference
                     ? 'Room added to preferences and previous rank owner was bumped'
+                    : alreadyInPreferences
+                      ? 'Room is already in your preferences'
                     : 'Room added to preferences',
                 preference,
                 bumpedPreference,
@@ -1674,6 +1757,7 @@ router.get(
                     {
                         initials: string;
                         name?: string;
+                        rank?: number;
                         classYear?: number;
                         drawDate?: Date;
                         isOwner: boolean;
@@ -1687,6 +1771,7 @@ router.get(
                         preference.user_email
                     ),
                     name: preference.user_name,
+                    rank: preference.rank,
                     classYear: priority?.classYear,
                     drawDate: priority?.drawDate,
                     isOwner: preference.user_id === req.session.user?.id,

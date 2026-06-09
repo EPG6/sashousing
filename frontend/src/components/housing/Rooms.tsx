@@ -62,6 +62,7 @@ export const RoomCard = ({
     roomTakenDisabledMessage,
     canManagePreferences = false,
     isInPreferenceRanking = false,
+    nextPreferenceRank,
     onAddPreference,
     onRemovePreference,
     onRoomDrawStatusChange,
@@ -94,6 +95,7 @@ export const RoomCard = ({
         : null;
     const preferenceHolderLabel = preferenceHolder
         ? [
+              preferenceHolder.rank ? `#${preferenceHolder.rank}` : null,
               preferenceHolder.initials,
               preferenceHolder.classYear
                   ? `Year ${preferenceHolder.classYear}`
@@ -103,6 +105,12 @@ export const RoomCard = ({
               .filter(Boolean)
               .join(' - ')
         : null;
+    const hasDifferentRankHolder =
+        Boolean(preferenceHolder) &&
+        !preferenceHolder?.isOwner &&
+        Boolean(nextPreferenceRank) &&
+        Boolean(preferenceHolder?.rank) &&
+        preferenceHolder?.rank !== nextPreferenceRank;
     const roomDrawCardClasses = canReportRoomDraw
         ? isTaken
             ? 'border-red-300 bg-red-50/70'
@@ -134,6 +142,13 @@ export const RoomCard = ({
     };
 
     const togglePreference = async () => {
+        if (hasDifferentRankHolder) {
+            setActionError(
+                `This room is ranked #${preferenceHolder?.rank} by another student. Your next rank would be #${nextPreferenceRank}, so it will not bump their ranking. Consider choosing another room for #${nextPreferenceRank}.`
+            );
+            return;
+        }
+
         const handler = isInPreferenceRanking
             ? onRemovePreference
             : onAddPreference;
@@ -348,7 +363,9 @@ export const RoomCard = ({
                             </p>
                             {!preferenceHolder?.isOwner && (
                                 <p className="mt-1">
-                                    Better room priority can bump this ranking.
+                                    {hasDifferentRankHolder
+                                        ? `Your next rank would be #${nextPreferenceRank}. Bumping only applies when both students rank the room in the same position, so choose another room for #${nextPreferenceRank}.`
+                                        : 'Better room priority can bump this ranking.'}
                                 </p>
                             )}
                         </div>
@@ -356,7 +373,7 @@ export const RoomCard = ({
                     <button
                         type="button"
                         onClick={togglePreference}
-                        disabled={updatingPreference}
+                        disabled={updatingPreference || hasDifferentRankHolder}
                         className={`rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
                             isInPreferenceRanking
                                 ? 'border border-sas-green text-sas-green hover:bg-sas-green hover:text-sas-white'
@@ -367,7 +384,9 @@ export const RoomCard = ({
                             ? 'Updating...'
                             : isInPreferenceRanking
                               ? 'Remove from Ranking'
-                              : preferenceHolder
+                              : hasDifferentRankHolder
+                                ? `Rank #${preferenceHolder?.rank} Protected`
+                                : preferenceHolder
                                 ? 'Bump and Rank'
                                 : 'Add to Ranking'}
                     </button>

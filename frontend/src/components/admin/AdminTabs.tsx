@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 type AdminTabsProps = {
     activeTab: 'housing-data' | 'room-draw' | 'room-preferences';
+    onNavigate?: (href: string) => void;
 };
 
 const tabs = [
@@ -24,7 +25,7 @@ const tabs = [
     },
 ] as const;
 
-export default function AdminTabs({ activeTab }: AdminTabsProps) {
+export default function AdminTabs({ activeTab, onNavigate }: AdminTabsProps) {
     return (
         <nav className="mb-8 flex gap-2 border-b border-sas-line pb-3">
             {tabs.map((tab) => {
@@ -34,6 +35,14 @@ export default function AdminTabs({ activeTab }: AdminTabsProps) {
                     <Link
                         key={tab.id}
                         href={tab.href}
+                        onClick={(event) => {
+                            if (!onNavigate) {
+                                return;
+                            }
+
+                            event.preventDefault();
+                            onNavigate(tab.href);
+                        }}
                         className={`flex-1 rounded-md px-4 py-2 text-center text-sm font-medium transition-all duration-200 ease-smooth sm:flex-none sm:text-left ${
                             isActive
                                 ? 'bg-sas-green text-sas-white shadow-sm'
