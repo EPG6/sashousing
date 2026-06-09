@@ -1431,6 +1431,7 @@ router.post(
 
                     const currentRoomHolder = await RoomPreferences.findOne({
                         housing_room_id: roomId,
+                        rank: challengerRank,
                         $or: [
                             { status: 'active' },
                             { status: { $exists: false } },
@@ -1441,10 +1442,6 @@ router.post(
                         currentRoomHolder &&
                         currentRoomHolder.user_id !== userId
                     ) {
-                        if (currentRoomHolder.rank !== challengerRank) {
-                            throw new Error('ROOM_RANK_CONFLICT');
-                        }
-
                         const incumbentPriority =
                             await RoomDrawParticipants.findOne({
                                 user_id: currentRoomHolder.user_id,
@@ -1526,17 +1523,6 @@ router.post(
                     res.status(409).json({
                         message:
                             'Room is already ranked by someone with better priority',
-                    });
-                    return;
-                }
-
-                if (
-                    error instanceof Error &&
-                    error.message === 'ROOM_RANK_CONFLICT'
-                ) {
-                    res.status(409).json({
-                        message:
-                            'Room is ranked at a different position by another student',
                     });
                     return;
                 }
@@ -1754,18 +1740,22 @@ router.get(
             const holders = preferences.reduce<
                 Record<
                     number,
-                    {
+                    Array<{
                         initials: string;
                         name?: string;
                         rank?: number;
                         classYear?: number;
                         drawDate?: Date;
                         isOwner: boolean;
-                    }
+                    }>
                 >
             >((acc, preference) => {
                 const priority = participantsByUserId.get(preference.user_id);
-                acc[preference.housing_room_id] = {
+                if (!acc[preference.housing_room_id]) {
+                    acc[preference.housing_room_id] = [];
+                }
+
+                acc[preference.housing_room_id].push({
                     initials: getInitials(
                         preference.user_name,
                         preference.user_email
@@ -1775,7 +1765,7 @@ router.get(
                     classYear: priority?.classYear,
                     drawDate: priority?.drawDate,
                     isOwner: preference.user_id === req.session.user?.id,
-                };
+                });
                 return acc;
             }, {});
 

@@ -379,7 +379,7 @@ export default function RoomDrawAdminPage() {
 
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
-            <SiteHeader />
+            <SiteHeader onNavigate={navigateWithUnsavedCheck} />
             <AppModal
                 isOpen={confirmAction !== null}
                 title={

@@ -436,10 +436,9 @@ RoomPreferenceSchema.index(
     { unique: true, partialFilterExpression: { status: 'active' } }
 );
 RoomPreferenceSchema.index(
-    { housing_room_id: 1 },
+    { housing_room_id: 1, rank: 1 },
     { unique: true, partialFilterExpression: { status: 'active' } }
 );
-
 const RoomPreferences =
     (mongoose.models.RoomPreferences as mongoose.Model<IRoomPreference>) ||
     mongoose.model<IRoomPreference>('RoomPreferences', RoomPreferenceSchema);

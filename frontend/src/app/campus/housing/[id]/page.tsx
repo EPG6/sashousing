@@ -180,7 +180,7 @@ export default function DynamicRooms() {
                     preferenceHoldersResponse?.ok
                         ? ((await preferenceHoldersResponse.json()) as Record<
                               number,
-                              RoomPreferenceHolder
+                              RoomPreferenceHolder[]
                           >)
                         : {};
 
@@ -219,7 +219,7 @@ export default function DynamicRooms() {
                         averageRating: ratingsMap[room.id]?.overallAverage || 0,
                         reviewCount: ratingsMap[room.id]?.reviewCount || 0,
                         roomDrawStatus: roomDrawData.statuses[room.id],
-                        roomPreferenceHolder: preferenceHolders[room.id],
+                        roomPreferenceHolders: preferenceHolders[room.id],
                     }))
                 );
             } catch (error) {
@@ -345,7 +345,7 @@ export default function DynamicRooms() {
             const holdersData = holdersResponse.ok
                 ? ((await holdersResponse.json()) as Record<
                       number,
-                      RoomPreferenceHolder
+                      RoomPreferenceHolder[]
                   >)
                 : {};
 
@@ -354,7 +354,7 @@ export default function DynamicRooms() {
                     currentRooms.map((room) => ({
                         ...room,
                         roomDrawStatus: statusesData.statuses[room.id],
-                        roomPreferenceHolder: holdersData[room.id],
+                        roomPreferenceHolders: holdersData[room.id],
                     }))
                 );
             }
@@ -394,7 +394,7 @@ export default function DynamicRooms() {
         const holdersData = holdersResponse.ok
             ? ((await holdersResponse.json()) as Record<
                   number,
-                  RoomPreferenceHolder
+                  RoomPreferenceHolder[]
               >)
             : {};
 
@@ -408,7 +408,7 @@ export default function DynamicRooms() {
         setRooms((currentRooms) =>
             currentRooms.map((room) => ({
                 ...room,
-                roomPreferenceHolder: holdersData[room.id],
+                roomPreferenceHolders: holdersData[room.id],
             }))
         );
     };

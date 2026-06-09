@@ -563,7 +563,7 @@ export default function HousingDataAdminPage() {
 
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
-            <SiteHeader />
+            <SiteHeader onNavigate={navigateWithUnsavedCheck} />
             <AppModal
                 isOpen={pendingBuildingId !== null}
                 title="Discard Unsaved Edits?"

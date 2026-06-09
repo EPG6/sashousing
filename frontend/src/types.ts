@@ -36,7 +36,7 @@ export interface Room {
     averageRating?: number;
     reviewCount?: number;
     roomDrawStatus?: RoomDrawRoomStatus;
-    roomPreferenceHolder?: RoomPreferenceHolder;
+    roomPreferenceHolders?: RoomPreferenceHolder[];
 }
 
 export interface RoomDrawSettings {

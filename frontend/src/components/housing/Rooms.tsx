@@ -86,31 +86,32 @@ export const RoomCard = ({
               timeStyle: 'short',
           })
         : null;
-    const preferenceHolder = room.roomPreferenceHolder;
-    const preferenceHolderDrawTime = preferenceHolder?.drawDate
-        ? new Date(preferenceHolder.drawDate).toLocaleString(undefined, {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-          })
-        : null;
-    const preferenceHolderLabel = preferenceHolder
-        ? [
-              preferenceHolder.rank ? `#${preferenceHolder.rank}` : null,
-              preferenceHolder.initials,
-              preferenceHolder.classYear
-                  ? `Year ${preferenceHolder.classYear}`
-                  : null,
-              preferenceHolderDrawTime,
-          ]
-              .filter(Boolean)
-              .join(' - ')
-        : null;
-    const hasDifferentRankHolder =
-        Boolean(preferenceHolder) &&
-        !preferenceHolder?.isOwner &&
-        Boolean(nextPreferenceRank) &&
-        Boolean(preferenceHolder?.rank) &&
-        preferenceHolder?.rank !== nextPreferenceRank;
+    const preferenceHolders = room.roomPreferenceHolders || [];
+    const sameRankPreferenceHolder = preferenceHolders.find(
+        (holder) =>
+            !holder.isOwner &&
+            Boolean(nextPreferenceRank) &&
+            holder.rank === nextPreferenceRank
+    );
+    const formatPreferenceHolder = (
+        holder: NonNullable<typeof preferenceHolders>[number]
+    ) => {
+        const holderDrawTime = holder.drawDate
+            ? new Date(holder.drawDate).toLocaleString(undefined, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+              })
+            : null;
+
+        return [
+            holder.rank ? `#${holder.rank}` : null,
+            holder.initials,
+            holder.classYear ? `Year ${holder.classYear}` : null,
+            holderDrawTime,
+        ]
+            .filter(Boolean)
+            .join(' - ');
+    };
     const roomDrawCardClasses = canReportRoomDraw
         ? isTaken
             ? 'border-red-300 bg-red-50/70'
@@ -142,13 +143,6 @@ export const RoomCard = ({
     };
 
     const togglePreference = async () => {
-        if (hasDifferentRankHolder) {
-            setActionError(
-                `This room is ranked #${preferenceHolder?.rank} by another student. Your next rank would be #${nextPreferenceRank}, so it will not bump their ranking. Consider choosing another room for #${nextPreferenceRank}.`
-            );
-            return;
-        }
-
         const handler = isInPreferenceRanking
             ? onRemovePreference
             : onAddPreference;
@@ -356,24 +350,45 @@ export const RoomCard = ({
             </Link>
             {canManagePreferences && (
                 <div className="mt-3">
-                    {preferenceHolderLabel && (
+                    {preferenceHolders.length > 0 && (
                         <div className="mb-3 rounded-md border border-sas-line bg-sas-mist px-3 py-2 text-xs text-sas-black/65">
-                            <p className="font-medium text-sas-black">
-                                Ranked by {preferenceHolderLabel}
-                            </p>
-                            {!preferenceHolder?.isOwner && (
-                                <p className="mt-1">
-                                    {hasDifferentRankHolder
-                                        ? `Your next rank would be #${nextPreferenceRank}. Bumping only applies when both students rank the room in the same position, so choose another room for #${nextPreferenceRank}.`
-                                        : 'Better room priority can bump this ranking.'}
+                            <div className="space-y-1">
+                                {preferenceHolders
+                                    .slice()
+                                    .sort(
+                                        (a, b) => (a.rank || 0) - (b.rank || 0)
+                                    )
+                                    .map((holder) => (
+                                        <p
+                                            key={`${holder.rank}-${holder.initials}-${holder.drawDate || ''}`}
+                                            className="font-medium text-sas-black"
+                                        >
+                                            Ranked by {formatPreferenceHolder(holder)}
+                                            {holder.isOwner ? ' (you)' : ''}
+                                        </p>
+                                    ))}
+                            </div>
+                            {sameRankPreferenceHolder ? (
+                                <p className="mt-2">
+                                    Better room priority can bump the matching
+                                    rank.
                                 </p>
-                            )}
+                            ) : preferenceHolders.some(
+                                  (holder) => !holder.isOwner
+                              ) &&
+                              nextPreferenceRank &&
+                              !isInPreferenceRanking ? (
+                                <p className="mt-2">
+                                    Your next rank is #{nextPreferenceRank};
+                                    different rank positions can coexist.
+                                </p>
+                            ) : null}
                         </div>
                     )}
                     <button
                         type="button"
                         onClick={togglePreference}
-                        disabled={updatingPreference || hasDifferentRankHolder}
+                        disabled={updatingPreference}
                         className={`rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
                             isInPreferenceRanking
                                 ? 'border border-sas-green text-sas-green hover:bg-sas-green hover:text-sas-white'
@@ -384,9 +399,7 @@ export const RoomCard = ({
                             ? 'Updating...'
                             : isInPreferenceRanking
                               ? 'Remove from Ranking'
-                              : hasDifferentRankHolder
-                                ? `Rank #${preferenceHolder?.rank} Protected`
-                                : preferenceHolder
+                              : sameRankPreferenceHolder
                                 ? 'Bump and Rank'
                                 : 'Add to Ranking'}
                     </button>

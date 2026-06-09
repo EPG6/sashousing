@@ -38,7 +38,6 @@ const USER_SAFE_MESSAGES = new Set([
     'Room is already in your preferences',
     'Room is already ranked by someone with a better draw time',
     'Room is already ranked by someone with better priority',
-    'Room is ranked at a different position by another student',
     'Room ranking changed while you were updating. Please try again.',
     'Overall rating is required',
     'Quiet rating is required',
