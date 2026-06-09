@@ -99,6 +99,34 @@ const ROOM_FIELDS = [
     { key: 'note' as const, label: 'Note', type: 'text' as const },
 ] as const;
 
+const BOOLEAN_ROOM_FIELD_KEYS = new Set<keyof RoomForm>([
+    'sink',
+    'closet',
+    'balcony',
+    'privateBath',
+    'suiteBath',
+]);
+
+const getRoomFieldValue = (
+    roomForm: RoomForm,
+    fieldKey: keyof RoomForm,
+    isEditingRoom: boolean
+) => {
+    const value = roomForm[fieldKey];
+    if (isEditingRoom || !BOOLEAN_ROOM_FIELD_KEYS.has(fieldKey)) {
+        return value;
+    }
+
+    if (value === 'true') {
+        return 'Yes';
+    }
+    if (value === 'false') {
+        return 'No';
+    }
+
+    return value;
+};
+
 export default function HousingDataAdminPage() {
     const { user, loading: authLoading } = useAuth();
     const [buildings, setBuildings] = useState<BuildingSearchDoc[]>([]);
@@ -838,10 +866,11 @@ export default function HousingDataAdminPage() {
                                                                             field.type
                                                                         }
                                                                         value={
-                                                                            roomForm[
-                                                                                field
-                                                                                    .key
-                                                                            ]
+                                                                            getRoomFieldValue(
+                                                                                roomForm,
+                                                                                field.key,
+                                                                                isEditingRoom
+                                                                            )
                                                                         }
                                                                         disabled={
                                                                             !isEditingRoom
@@ -937,10 +966,11 @@ export default function HousingDataAdminPage() {
                                                                                 field.type
                                                                             }
                                                                             value={
-                                                                                roomForm[
-                                                                                    field
-                                                                                        .key
-                                                                                ]
+                                                                                getRoomFieldValue(
+                                                                                    roomForm,
+                                                                                    field.key,
+                                                                                    isEditingRoom
+                                                                                )
                                                                             }
                                                                             disabled={
                                                                                 !isEditingRoom

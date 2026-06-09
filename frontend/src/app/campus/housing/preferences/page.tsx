@@ -434,7 +434,7 @@ export default function RoomPreferencesPage() {
                                         </p>
                                         {preference.rankOwner && (
                                             <p className="mt-1 text-xs text-sas-black/55">
-                                                Held by{' '}
+                                                Ranked by{' '}
                                                 {preference.rankOwner.initials}
                                                 {preference.rankOwner.classYear
                                                     ? ` - Year ${preference.rankOwner.classYear}`
