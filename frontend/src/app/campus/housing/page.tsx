@@ -36,6 +36,7 @@ const HousingPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+    const searchTokens = normalizedSearchQuery.split(/\s+/).filter(Boolean);
 
     useEffect(() => {
         const fetchHousingData = async () => {
@@ -105,9 +106,7 @@ const HousingPage = () => {
     }, []);
 
     const filteredHousingData = useMemo(() => {
-        const normalizedQuery = normalizedSearchQuery;
-
-        if (!normalizedQuery) {
+        if (searchTokens.length === 0) {
             return housingData;
         }
 
@@ -127,11 +126,28 @@ const HousingPage = () => {
                         .join(' ')
                         .toLowerCase();
 
-                    return searchText.includes(normalizedQuery);
+                    return searchTokens.every((token) =>
+                        searchText.includes(token)
+                    );
                 }),
             }))
             .filter((campus) => campus.buildings.length > 0);
-    }, [housingData, normalizedSearchQuery]);
+    }, [housingData, searchTokens]);
+
+    const getMatchingRoomNumbers = (building: BuildingCard) => {
+        if (searchTokens.length === 0) {
+            return [];
+        }
+
+        return building.roomNumbers
+            .filter((roomNumber) => {
+                const normalizedRoomNumber = roomNumber.toLowerCase();
+                return searchTokens.some((token) =>
+                    normalizedRoomNumber.includes(token)
+                );
+            })
+            .slice(0, 5);
+    };
 
     if (loading) {
         return <Loading />;
@@ -182,67 +198,58 @@ const HousingPage = () => {
                             {campus.campus}
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {campus.buildings.map((building) => (
-                                <Link
-                                    key={building.id}
-                                    href={{
-                                        pathname: `/campus/housing/${building.id}`,
-                                        query: searchQuery.trim()
-                                            ? {
-                                                  roomSearch:
-                                                      searchQuery.trim(),
-                                              }
-                                            : {},
-                                    }}
-                                    className="block overflow-hidden rounded-md border border-sas-line bg-sas-white shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-sas-green"
-                                >
-                                    <Image
-                                        src={building.image}
-                                        alt={building.name}
-                                        width={800}
-                                        height={400}
-                                        className="w-full h-48 object-cover"
-                                    />
-                                    <div className="p-6">
-                                        <h3 className="mb-2 font-display text-xl font-semibold text-sas-black sm:text-2xl">
-                                            {building.name}
-                                        </h3>
-                                        <p className="text-sm text-sas-black/70">
-                                            {building.description?.slice(
-                                                0,
-                                                100
-                                            )}
-                                            ...
-                                        </p>
-                                        {normalizedSearchQuery &&
-                                            building.roomNumbers.some(
-                                                (roomNumber) =>
-                                                    roomNumber
-                                                        .toLowerCase()
-                                                        .includes(
-                                                            normalizedSearchQuery
-                                                        )
-                                            ) && (
-                                                <p className="mt-3 text-sm text-sas-green">
-                                                    Matching rooms:{' '}
-                                                    {building.roomNumbers
-                                                        .filter((roomNumber) =>
-                                                            roomNumber
-                                                                .toLowerCase()
-                                                                .includes(
-                                                                    normalizedSearchQuery
-                                                                )
-                                                        )
-                                                        .slice(0, 5)
-                                                        .join(', ')}
-                                                </p>
-                                            )}
-                                        <span className="mt-4 inline-block font-medium text-sas-green hover:underline">
-                                            View Details
-                                        </span>
-                                    </div>
-                                </Link>
-                            ))}
+                            {campus.buildings.map((building) => {
+                                const matchingRooms =
+                                    getMatchingRoomNumbers(building);
+
+                                return (
+                                    <Link
+                                        key={building.id}
+                                        href={{
+                                            pathname: `/campus/housing/${building.id}`,
+                                            query:
+                                                matchingRooms.length > 0
+                                                    ? {
+                                                          roomSearch:
+                                                              matchingRooms[0],
+                                                      }
+                                                    : {},
+                                        }}
+                                        className="block overflow-hidden rounded-md border border-sas-line bg-sas-white shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-sas-green"
+                                    >
+                                        <Image
+                                            src={building.image}
+                                            alt={building.name}
+                                            width={800}
+                                            height={400}
+                                            className="w-full h-48 object-cover"
+                                        />
+                                        <div className="p-6">
+                                            <h3 className="mb-2 font-display text-xl font-semibold text-sas-black sm:text-2xl">
+                                                {building.name}
+                                            </h3>
+                                            <p className="text-sm text-sas-black/70">
+                                                {building.description?.slice(
+                                                    0,
+                                                    100
+                                                )}
+                                                ...
+                                            </p>
+                                            {matchingRooms.length > 0 && (
+                                                    <p className="mt-3 text-sm text-sas-green">
+                                                        Matching rooms:{' '}
+                                                        {matchingRooms.join(
+                                                            ', '
+                                                        )}
+                                                    </p>
+                                                )}
+                                            <span className="mt-4 inline-block font-medium text-sas-green hover:underline">
+                                                View Details
+                                            </span>
+                                        </div>
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </section>
                 ))}

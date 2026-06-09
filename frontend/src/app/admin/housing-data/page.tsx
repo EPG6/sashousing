@@ -84,10 +84,15 @@ export default function HousingDataAdminPage() {
         [buildings, selectedBuildingId]
     );
 
-    const filteredBuildings = useMemo(() => {
-        const normalizedQuery = buildingSearchQuery.trim().toLowerCase();
+    const normalizedBuildingSearchQuery = buildingSearchQuery
+        .trim()
+        .toLowerCase();
+    const buildingSearchTokens = normalizedBuildingSearchQuery
+        .split(/\s+/)
+        .filter(Boolean);
 
-        if (!normalizedQuery) {
+    const filteredBuildings = useMemo(() => {
+        if (buildingSearchTokens.length === 0) {
             return buildings;
         }
 
@@ -104,13 +109,11 @@ export default function HousingDataAdminPage() {
                 .join(' ')
                 .toLowerCase();
 
-            return searchText.includes(normalizedQuery);
+            return buildingSearchTokens.every((token) =>
+                searchText.includes(token)
+            );
         });
-    }, [buildings, buildingSearchQuery]);
-
-    const normalizedBuildingSearchQuery = buildingSearchQuery
-        .trim()
-        .toLowerCase();
+    }, [buildings, buildingSearchTokens]);
 
     const hasUnsavedEdits = editingBuilding || editingRoomId !== null;
 
@@ -471,13 +474,14 @@ export default function HousingDataAdminPage() {
                             const isSelected =
                                 building.id === selectedBuildingId;
                             const matchingRooms =
-                                normalizedBuildingSearchQuery
+                                buildingSearchTokens.length > 0
                                     ? building.roomNumbers
                                           .filter((roomNumber) =>
-                                              roomNumber
-                                                  .toLowerCase()
-                                                  .includes(
-                                                      normalizedBuildingSearchQuery
+                                              buildingSearchTokens.some(
+                                                  (token) =>
+                                                      roomNumber
+                                                          .toLowerCase()
+                                                          .includes(token)
                                                   )
                                           )
                                           .slice(0, 5)
