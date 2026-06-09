@@ -12,6 +12,7 @@ import {
     RoomPreference,
 } from '@/types';
 import { backendUrl } from '@/utils/api';
+import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -234,8 +235,12 @@ export default function DynamicRooms() {
         );
 
         if (!response.ok) {
-            const data = await response.json().catch(() => null);
-            throw new Error(data?.message || 'Failed to update room status');
+            throw new Error(
+                await getApiErrorMessage(
+                    response,
+                    'Failed to update room status'
+                )
+            );
         }
 
         const data = await response.json();
@@ -284,11 +289,16 @@ export default function DynamicRooms() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to save draw priority');
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to save draw priority'
+                    )
+                );
             }
 
+            const data = await response.json();
             setRoomDrawPriority(data.priority);
             setRoomDrawRequiresPriority(false);
 
@@ -326,9 +336,10 @@ export default function DynamicRooms() {
             );
         } catch (error) {
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not save draw priority.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not save draw priority.'
+                )
             );
         } finally {
             setSavingPriority(false);
@@ -345,8 +356,12 @@ export default function DynamicRooms() {
         );
 
         if (!response.ok) {
-            const data = await response.json().catch(() => null);
-            throw new Error(data?.message || 'Failed to add room preference');
+            throw new Error(
+                await getApiErrorMessage(
+                    response,
+                    'Failed to add room preference'
+                )
+            );
         }
 
         setPreferenceRoomIds((currentRoomIds) => {
@@ -366,9 +381,11 @@ export default function DynamicRooms() {
         );
 
         if (!response.ok) {
-            const data = await response.json().catch(() => null);
             throw new Error(
-                data?.message || 'Failed to remove room preference'
+                await getApiErrorMessage(
+                    response,
+                    'Failed to remove room preference'
+                )
             );
         }
 

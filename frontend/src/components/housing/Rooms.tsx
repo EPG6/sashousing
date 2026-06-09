@@ -1,5 +1,6 @@
 'use client';
 import { RoomCardProps } from '@/types';
+import { getUserSafeMessage } from '@/utils/apiErrors';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -70,6 +71,7 @@ export const RoomCard = ({
     const [preferenceMessage, setPreferenceMessage] = useState<string | null>(
         null
     );
+    const [actionError, setActionError] = useState<string | null>(null);
     const isTaken = room.roomDrawStatus?.status === 'taken';
     const canChangeTakenStatus =
         !isTaken || room.roomDrawStatus?.isOwner || canOverrideRoomDraw;
@@ -99,12 +101,14 @@ export const RoomCard = ({
 
         try {
             setUpdatingStatus(true);
+            setActionError(null);
             await onRoomDrawStatusChange(room.id, nextStatus);
         } catch (error) {
-            alert(
-                error instanceof Error
-                    ? error.message
-                    : 'Failed to update room status'
+            setActionError(
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Failed to update room status'
+                )
             );
         } finally {
             setUpdatingStatus(false);
@@ -122,6 +126,7 @@ export const RoomCard = ({
         try {
             setUpdatingPreference(true);
             setPreferenceMessage(null);
+            setActionError(null);
             await handler(room.id);
             setPreferenceMessage(
                 isInPreferenceRanking
@@ -129,10 +134,11 @@ export const RoomCard = ({
                     : 'Added to ranking'
             );
         } catch (error) {
-            alert(
-                error instanceof Error
-                    ? error.message
-                    : 'Failed to update room preference'
+            setActionError(
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Failed to update room preference'
+                )
             );
         } finally {
             setUpdatingPreference(false);
@@ -299,6 +305,12 @@ export const RoomCard = ({
                             </p>
                         )}
                 </div>
+            )}
+
+            {actionError && (
+                <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                    {actionError}
+                </p>
             )}
 
             <Link

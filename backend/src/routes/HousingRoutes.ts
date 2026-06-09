@@ -112,6 +112,52 @@ const parseOptionalShortText = (value: unknown, maxLength: number) => {
     return String(value).trim().slice(0, maxLength);
 };
 
+const parseReviewRating = (value: unknown) => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+        return null;
+    }
+
+    return parsed;
+};
+
+const parseReviewPayload = (body: Record<string, unknown>) => {
+    const overall = parseReviewRating(body.overall);
+    if (overall === null) {
+        return { message: 'Overall rating is required' };
+    }
+
+    const quiet = parseReviewRating(body.quiet);
+    if (quiet === null) {
+        return { message: 'Quiet rating is required' };
+    }
+
+    const layout = parseReviewRating(body.layout);
+    if (layout === null) {
+        return { message: 'Layout rating is required' };
+    }
+
+    const temperature = parseReviewRating(body.temperature);
+    if (temperature === null) {
+        return { message: 'Temperature rating is required' };
+    }
+
+    const comments = String(body.comments || '').trim();
+    if (!comments) {
+        return { message: 'Please leave a comment' };
+    }
+
+    return {
+        value: {
+            overall,
+            quiet,
+            layout,
+            temperature,
+            comments,
+        },
+    };
+};
+
 type RoomPreferenceInput = {
     housing_room_id?: unknown;
     notes?: unknown;
@@ -1715,17 +1761,20 @@ router.post(
                 return;
             }
 
-            // parse review fields from request
-            const { overall, quiet, layout, temperature, comments } = req.body;
+            const parsedReview = parseReviewPayload(req.body);
+            if ('message' in parsedReview) {
+                res.status(400).json({ message: parsedReview.message });
+                return;
+            }
 
             // construct review data
             const reviewData = {
                 id: maxId,
-                overall_rating: overall,
-                quiet_rating: quiet,
-                layout_rating: layout,
-                temperature_rating: temperature,
-                comments: comments,
+                overall_rating: parsedReview.value.overall,
+                quiet_rating: parsedReview.value.quiet,
+                layout_rating: parsedReview.value.layout,
+                temperature_rating: parsedReview.value.temperature,
+                comments: parsedReview.value.comments,
                 housing_room_id: roomData.id,
                 user_id: req.session.user!.id,
                 user_email: req.session.user!.email,
@@ -1738,7 +1787,8 @@ router.post(
             req.files = undefined; // free up memory
             res.status(201).json({ message: 'Review saved successfully' });
         } catch (error) {
-            res.status(400).json({ message: 'Error creating member' });
+            console.error('Review create error:', error);
+            res.status(500).json({ message: 'Server error' });
         }
     }
 );
@@ -1767,16 +1817,19 @@ router.patch(
                 return;
             }
 
-            // parse review fields from request
-            const { overall, quiet, layout, temperature, comments } = req.body;
+            const parsedReview = parseReviewPayload(req.body);
+            if ('message' in parsedReview) {
+                res.status(400).json({ message: parsedReview.message });
+                return;
+            }
 
             // construct review data
             let updateData = {
-                overall_rating: overall,
-                quiet_rating: quiet,
-                layout_rating: layout,
-                temperature_rating: temperature,
-                comments: comments,
+                overall_rating: parsedReview.value.overall,
+                quiet_rating: parsedReview.value.quiet,
+                layout_rating: parsedReview.value.layout,
+                temperature_rating: parsedReview.value.temperature,
+                comments: parsedReview.value.comments,
                 pictures: oldReview.pictures,
             };
 
@@ -1842,7 +1895,7 @@ router.patch(
             });
         } catch (error) {
             console.error('update error: ', error);
-            res.status(400).json({ message: 'Error updating review' });
+            res.status(500).json({ message: 'Server error' });
         }
     }
 );

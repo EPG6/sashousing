@@ -3,12 +3,14 @@
 import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
+import AppModal from '@/components/AppModal';
 import { PictureModal, ReviewForm } from '@/components/housing/Reviews';
 import { StarRating, getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
 import { Review, RoomWithReviews } from '@/types';
 import { FormattedReviewText } from '@/utils/textFormatting';
 import { backendUrl } from '@/utils/api';
+import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -25,19 +27,19 @@ const RoomPage = () => {
     const [isCreatingNew, setIsCreatingNew] = useState(false);
     const [selectedReview, setSelectedReview] = useState<Review | null>(null);
     const [selectedPicture, setSelectedPicture] = useState<string | null>(null);
+    const [pendingDeleteReviewId, setPendingDeleteReviewId] = useState<
+        number | null
+    >(null);
+    const [showCancelEditModal, setShowCancelEditModal] = useState(false);
+    const [pageMessage, setPageMessage] = useState<string | null>(null);
+    const [pageError, setPageError] = useState<string | null>(null);
     const { user, loading: authLoading } = useAuth();
 
     const handleAddNewReviewClick = (shouldScrollToForm = false) => {
         if (isCreatingNew) {
             setIsCreatingNew(false);
         } else if (selectedReview) {
-            if (
-                window.confirm(
-                    'Are you sure you want to cancel editing this review? All new changes will be lost.'
-                )
-            ) {
-                setSelectedReview(null);
-            }
+            setShowCancelEditModal(true);
         } else {
             setIsCreatingNew(true);
         }
@@ -127,36 +129,105 @@ const RoomPage = () => {
         return `${month} ${year}`;
     };
 
-    const handleDelete = async (id: number) => {
-        if (window.confirm('Are you sure you want to delete this review?')) {
-            try {
-                setLoading(true);
-                const response = await fetch(
-                    `${backendUrl}/api/campus/housing/reviews/${id}`,
-                    {
-                        method: 'DELETE',
-                        credentials: 'include',
-                    }
-                );
+    const handleDelete = async () => {
+        if (pendingDeleteReviewId === null) {
+            return;
+        }
 
-                if (!response.ok) {
-                    throw new Error('Failed to delete review');
+        try {
+            setLoading(true);
+            setPageMessage(null);
+            setPageError(null);
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/reviews/${pendingDeleteReviewId}`,
+                {
+                    method: 'DELETE',
+                    credentials: 'include',
                 }
+            );
 
-                alert('Review deleted successfully!');
-                setTimeout(() => window.location.reload(), 1000);
-            } catch (error) {
-                console.error('Error deleting review', error);
-                alert('Failed to delete review');
-            } finally {
-                setLoading(false);
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to delete review'
+                    )
+                );
             }
+
+            setPendingDeleteReviewId(null);
+            setPageMessage('Review deleted successfully.');
+            setTimeout(() => window.location.reload(), 800);
+        } catch (error) {
+            console.error('Error deleting review', error);
+            setPendingDeleteReviewId(null);
+            setPageError(
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Failed to delete review'
+                )
+            );
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
             <SiteHeader />
+            <AppModal
+                isOpen={showCancelEditModal}
+                title="Cancel Review Edit?"
+                onClose={() => setShowCancelEditModal(false)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setShowCancelEditModal(false)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Keep Editing
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSelectedReview(null);
+                                setShowCancelEditModal(false);
+                            }}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            Discard Changes
+                        </button>
+                    </>
+                }
+            >
+                Any changes in the review form will be lost.
+            </AppModal>
+            <AppModal
+                isOpen={pendingDeleteReviewId !== null}
+                title="Delete Review?"
+                onClose={() => setPendingDeleteReviewId(null)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingDeleteReviewId(null)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleDelete}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            Delete Review
+                        </button>
+                    </>
+                }
+            >
+                This review will be permanently removed.
+            </AppModal>
             <div
                 className={`mx-auto max-w-6xl px-4 py-8 sm:px-6 ${!isCreatingNew && !selectedReview ? 'pb-24' : ''}`}
             >
@@ -185,6 +256,17 @@ const RoomPage = () => {
                     {(isCreatingNew || selectedReview) && (
                         <div className="mb-8">
                             <ReviewForm review={selectedReview} />
+                        </div>
+                    )}
+
+                    {pageError && (
+                        <div className="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+                            {pageError}
+                        </div>
+                    )}
+                    {pageMessage && (
+                        <div className="mb-5 rounded-md border border-sas-green/30 bg-sas-green/10 px-4 py-3 text-sas-green">
+                            {pageMessage}
                         </div>
                     )}
 
@@ -340,7 +422,7 @@ const RoomPage = () => {
                                                         <button
                                                             className="text-m rounded-md border border-sas-green px-4 py-2 text-sas-green hover:bg-sas-green hover:text-sas-white"
                                                             onClick={() => {
-                                                                handleDelete(
+                                                                setPendingDeleteReviewId(
                                                                     review.id
                                                                 );
                                                             }}

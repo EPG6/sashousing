@@ -3,10 +3,12 @@
 import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
+import AppModal from '@/components/AppModal';
 import AdminTabs from '@/components/admin/AdminTabs';
 import { useAuth } from '@/hooks/useAuth';
 import { Building, Room } from '@/types';
 import { backendUrl } from '@/utils/api';
+import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -121,6 +123,9 @@ export default function HousingDataAdminPage() {
     const [savingRoomId, setSavingRoomId] = useState<number | null>(null);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [pendingBuildingId, setPendingBuildingId] = useState<number | null>(
+        null
+    );
 
     const selectedBuilding = useMemo(
         () =>
@@ -167,18 +172,25 @@ export default function HousingDataAdminPage() {
             return;
         }
 
-        if (
-            hasUnsavedEdits &&
-            !window.confirm(
-                'Switch buildings and discard unsaved edits?'
-            )
-        ) {
+        if (hasUnsavedEdits) {
+            setPendingBuildingId(buildingId);
             return;
         }
 
         setEditingBuilding(false);
         setEditingRoomId(null);
         setSelectedBuildingId(buildingId);
+    };
+
+    const confirmBuildingSwitch = () => {
+        if (pendingBuildingId === null) {
+            return;
+        }
+
+        setEditingBuilding(false);
+        setEditingRoomId(null);
+        setSelectedBuildingId(pendingBuildingId);
+        setPendingBuildingId(null);
     };
 
     useEffect(() => {
@@ -316,11 +328,16 @@ export default function HousingDataAdminPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to save building');
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to save building'
+                    )
+                );
             }
 
+            const data = await response.json();
             setBuildings((currentBuildings) =>
                 currentBuildings.map((building) =>
                     building.id === data.id
@@ -336,9 +353,10 @@ export default function HousingDataAdminPage() {
         } catch (error) {
             console.error('Building save error:', error);
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not save building.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not save building.'
+                )
             );
         } finally {
             setSavingBuilding(false);
@@ -385,11 +403,13 @@ export default function HousingDataAdminPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to save room');
+                throw new Error(
+                    await getApiErrorMessage(response, 'Failed to save room')
+                );
             }
 
+            const data = await response.json();
             setRooms((currentRooms) =>
                 currentRooms.map((room) => (room.id === data.id ? data : room))
             );
@@ -402,7 +422,10 @@ export default function HousingDataAdminPage() {
         } catch (error) {
             console.error('Room save error:', error);
             setError(
-                error instanceof Error ? error.message : 'Could not save room.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not save room.'
+                )
             );
         } finally {
             setSavingRoomId(null);
@@ -477,6 +500,32 @@ export default function HousingDataAdminPage() {
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
             <SiteHeader />
+            <AppModal
+                isOpen={pendingBuildingId !== null}
+                title="Discard Unsaved Edits?"
+                onClose={() => setPendingBuildingId(null)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingBuildingId(null)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Keep Editing
+                        </button>
+                        <button
+                            type="button"
+                            onClick={confirmBuildingSwitch}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            Discard Edits
+                        </button>
+                    </>
+                }
+            >
+                Switching buildings will discard the edits currently on this
+                page.
+            </AppModal>
             <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
                 <Link
                     href="/campus/housing"

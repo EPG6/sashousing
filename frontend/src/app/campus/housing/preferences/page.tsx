@@ -7,6 +7,7 @@ import { getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
 import { RoomDrawPriority, RoomDrawSettings, RoomPreference } from '@/types';
 import { backendUrl } from '@/utils/api';
+import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -120,12 +121,16 @@ export default function RoomPreferencesPage() {
             { credentials: 'include' }
         );
 
-        const data = await response.json().catch(() => null);
         if (!response.ok) {
-            throw new Error(data?.message || 'Failed to load room preferences');
+            throw new Error(
+                await getApiErrorMessage(
+                    response,
+                    'Failed to load room preferences'
+                )
+            );
         }
 
-        setPreferences(data);
+        setPreferences(await response.json());
     };
 
     const saveRoomDrawPriority = async (
@@ -151,9 +156,13 @@ export default function RoomPreferencesPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to save draw priority');
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to save draw priority'
+                    )
+                );
             }
 
             setRoomDrawRequiresPriority(false);
@@ -161,9 +170,10 @@ export default function RoomPreferencesPage() {
             await loadPreferences();
         } catch (error) {
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not save draw priority.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not save draw priority.'
+                )
             );
         } finally {
             setSavingPriority(false);
@@ -234,18 +244,23 @@ export default function RoomPreferencesPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to save room ranking');
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to save room ranking'
+                    )
+                );
             }
 
             setMessage('Room ranking saved.');
         } catch (error) {
             console.error('Room preference save error:', error);
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not save your room ranking.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not save your room ranking.'
+                )
             );
         } finally {
             setSaving(false);
