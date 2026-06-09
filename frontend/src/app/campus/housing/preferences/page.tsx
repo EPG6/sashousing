@@ -5,17 +5,41 @@ import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
 import { getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
-import { RoomDrawSettings, RoomPreference } from '@/types';
+import { RoomDrawPriority, RoomDrawSettings, RoomPreference } from '@/types';
 import { backendUrl } from '@/utils/api';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+
+const toDateTimeInputValue = (value?: string | Date | null) => {
+    if (!value) {
+        return '';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return offsetDate.toISOString().slice(0, 16);
+};
+
+const toIsoDateValue = (value: string) =>
+    value ? new Date(value).toISOString() : '';
 
 export default function RoomPreferencesPage() {
     const { user, loading: authLoading } = useAuth();
     const [preferences, setPreferences] = useState<RoomPreference[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [savingPriority, setSavingPriority] = useState(false);
     const [roomDrawVisible, setRoomDrawVisible] = useState(false);
+    const [roomDrawRequiresPriority, setRoomDrawRequiresPriority] =
+        useState(false);
+    const [priorityForm, setPriorityForm] = useState({
+        classYear: '',
+        drawDate: '',
+    });
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +68,31 @@ export default function RoomPreferencesPage() {
                     return;
                 }
 
+                const priorityResponse = await fetch(
+                    `${backendUrl}/api/campus/housing/room-draw/priority`,
+                    { credentials: 'include' }
+                );
+                const priorityData = priorityResponse.ok
+                    ? ((await priorityResponse.json()) as {
+                          priority: RoomDrawPriority | null;
+                          requiresPriority: boolean;
+                      })
+                    : null;
+                setRoomDrawRequiresPriority(
+                    Boolean(priorityData?.requiresPriority)
+                );
+                setPriorityForm({
+                    classYear: priorityData?.priority?.classYear
+                        ? String(priorityData.priority.classYear)
+                        : '',
+                    drawDate: toDateTimeInputValue(
+                        priorityData?.priority?.drawDate
+                    ),
+                });
+                if (priorityData?.requiresPriority) {
+                    return;
+                }
+
                 const response = await fetch(
                     `${backendUrl}/api/campus/housing/room-preferences`,
                     { credentials: 'include' }
@@ -64,6 +113,62 @@ export default function RoomPreferencesPage() {
 
         fetchPreferences();
     }, [authLoading, user]);
+
+    const loadPreferences = async () => {
+        const response = await fetch(
+            `${backendUrl}/api/campus/housing/room-preferences`,
+            { credentials: 'include' }
+        );
+
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+            throw new Error(data?.message || 'Failed to load room preferences');
+        }
+
+        setPreferences(data);
+    };
+
+    const saveRoomDrawPriority = async (
+        event: React.FormEvent<HTMLFormElement>
+    ) => {
+        event.preventDefault();
+        setSavingPriority(true);
+        setError(null);
+
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/room-draw/priority`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        classYear: priorityForm.classYear,
+                        drawDate: toIsoDateValue(priorityForm.drawDate),
+                    }),
+                }
+            );
+
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(data?.message || 'Failed to save draw priority');
+            }
+
+            setRoomDrawRequiresPriority(false);
+            setMessage('Draw priority saved.');
+            await loadPreferences();
+        } catch (error) {
+            setError(
+                error instanceof Error
+                    ? error.message
+                    : 'Could not save draw priority.'
+            );
+        } finally {
+            setSavingPriority(false);
+        }
+    };
 
     const movePreference = (index: number, direction: -1 | 1) => {
         const nextIndex = index + direction;
@@ -186,10 +291,77 @@ export default function RoomPreferencesPage() {
                     </div>
                 )}
 
+                {roomDrawVisible && (
+                    <form
+                        onSubmit={saveRoomDrawPriority}
+                        className="mb-6 rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6"
+                    >
+                        <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
+                            Room Draw Priority
+                        </h2>
+                        <p className="mt-2 text-sm text-sas-black/65">
+                            Enter or update your draw priority. Initials are not
+                            needed because your account identifies you.
+                        </p>
+                        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                            <label className="block">
+                                <span className="text-sm font-medium text-sas-black/75">
+                                    Year
+                                </span>
+                                <select
+                                    value={priorityForm.classYear}
+                                    onChange={(event) =>
+                                        setPriorityForm((current) => ({
+                                            ...current,
+                                            classYear: event.target.value,
+                                        }))
+                                    }
+                                    className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                >
+                                    <option value="">Select year</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                </select>
+                            </label>
+                            <label className="block">
+                                <span className="text-sm font-medium text-sas-black/75">
+                                    Draw Date
+                                </span>
+                                <input
+                                    type="datetime-local"
+                                    value={priorityForm.drawDate}
+                                    onChange={(event) =>
+                                        setPriorityForm((current) => ({
+                                            ...current,
+                                            drawDate: event.target.value,
+                                        }))
+                                    }
+                                    className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                />
+                            </label>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={savingPriority}
+                            className="mt-5 rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                        >
+                            {savingPriority ? 'Saving...' : 'Save Priority'}
+                        </button>
+                    </form>
+                )}
+
                 {!roomDrawVisible ? (
                     <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">
                         <p className="text-lg text-sas-black/75">
                             Room ranking is available during room draw.
+                        </p>
+                    </div>
+                ) : roomDrawRequiresPriority ? (
+                    <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">
+                        <p className="text-lg text-sas-black/75">
+                            Save your draw priority to view or edit your ranking.
                         </p>
                     </div>
                 ) : preferences.length === 0 ? (

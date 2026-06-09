@@ -11,6 +11,7 @@ export interface Building {
     name: string;
     campus: string;
     floors: number;
+    eligibleYear?: number | null;
     description?: string;
 }
 
@@ -22,6 +23,15 @@ export interface Room {
     occupancy_type?: number;
     closet_type?: number;
     bathroom_type?: number;
+    floor?: number;
+    eligibleYear?: number | null;
+    sink?: boolean;
+    closet?: boolean;
+    closetType?: string;
+    balcony?: boolean;
+    privateBath?: boolean;
+    suiteBath?: boolean;
+    note?: string;
     housing_building_id: number;
     averageRating?: number;
     reviewCount?: number;
@@ -32,6 +42,15 @@ export interface RoomDrawSettings {
     startsAt: string | null;
     endsAt: string | null;
     isVisible: boolean;
+}
+
+export interface RoomDrawPriority {
+    _id?: string;
+    user_id: string;
+    user_email: string;
+    user_name?: string;
+    classYear: number;
+    drawDate: string;
 }
 
 export interface RoomDrawRoomStatus {
@@ -45,6 +64,8 @@ export interface RoomDrawRoomStatus {
 
 export interface RoomDrawStatusResponse extends RoomDrawSettings {
     statuses: Record<number, RoomDrawRoomStatus>;
+    priority?: RoomDrawPriority | null;
+    requiresPriority?: boolean;
 }
 
 export interface Review {

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
     Building,
     Room,
+    RoomDrawPriority,
     RoomDrawStatusResponse,
     RoomPreference,
 } from '@/types';
@@ -17,6 +18,23 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 type RoomDrawStatusFilter = 'all' | 'not_taken' | 'taken';
+
+const toDateTimeInputValue = (value?: string | Date | null) => {
+    if (!value) {
+        return '';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return offsetDate.toISOString().slice(0, 16);
+};
+
+const toIsoDateValue = (value: string) =>
+    value ? new Date(value).toISOString() : '';
 
 export default function DynamicRooms() {
     const params = useParams();
@@ -30,6 +48,15 @@ export default function DynamicRooms() {
     const [rooms, setRooms] = useState<Room[]>([]);
     const [building, setBuilding] = useState<Building | null>(null);
     const [roomDrawVisible, setRoomDrawVisible] = useState(false);
+    const [roomDrawPriority, setRoomDrawPriority] =
+        useState<RoomDrawPriority | null>(null);
+    const [roomDrawRequiresPriority, setRoomDrawRequiresPriority] =
+        useState(false);
+    const [priorityForm, setPriorityForm] = useState({
+        classYear: '',
+        drawDate: '',
+    });
+    const [savingPriority, setSavingPriority] = useState(false);
     const [preferenceRoomIds, setPreferenceRoomIds] = useState<Set<number>>(
         new Set()
     );
@@ -124,7 +151,10 @@ export default function DynamicRooms() {
                               >),
                     ]);
                 const preferencesResponse =
-                    !authLoading && user && roomDrawData.isVisible
+                    !authLoading &&
+                    user &&
+                    roomDrawData.isVisible &&
+                    !roomDrawData.requiresPriority
                         ? await fetch(
                               `${backendUrl}/api/campus/housing/room-preferences`,
                               { credentials: 'include' }
@@ -145,6 +175,18 @@ export default function DynamicRooms() {
                 setImageErrored(false);
 
                 setRoomDrawVisible(roomDrawData.isVisible);
+                setRoomDrawPriority(roomDrawData.priority || null);
+                setRoomDrawRequiresPriority(
+                    Boolean(roomDrawData.requiresPriority)
+                );
+                setPriorityForm({
+                    classYear: roomDrawData.priority?.classYear
+                        ? String(roomDrawData.priority.classYear)
+                        : '',
+                    drawDate: toDateTimeInputValue(
+                        roomDrawData.priority?.drawDate
+                    ),
+                });
                 setPreferenceRoomIds(
                     new Set(
                         preferencesData.map(
@@ -217,6 +259,80 @@ export default function DynamicRooms() {
                     : currentRoom
             )
         );
+    };
+
+    const saveRoomDrawPriority = async (
+        event: React.FormEvent<HTMLFormElement>
+    ) => {
+        event.preventDefault();
+        setSavingPriority(true);
+        setError(null);
+
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/room-draw/priority`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        classYear: priorityForm.classYear,
+                        drawDate: toIsoDateValue(priorityForm.drawDate),
+                    }),
+                }
+            );
+
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(data?.message || 'Failed to save draw priority');
+            }
+
+            setRoomDrawPriority(data.priority);
+            setRoomDrawRequiresPriority(false);
+
+            const buildingId = Number(id);
+            const [statusesResponse, preferencesResponse] = await Promise.all([
+                fetch(
+                    `${backendUrl}/api/campus/housing/${buildingId}/room-draw/statuses`,
+                    { credentials: 'include' }
+                ),
+                fetch(`${backendUrl}/api/campus/housing/room-preferences`, {
+                    credentials: 'include',
+                }),
+            ]);
+            const statusesData = statusesResponse.ok
+                ? ((await statusesResponse.json()) as RoomDrawStatusResponse)
+                : null;
+            const preferencesData = preferencesResponse.ok
+                ? ((await preferencesResponse.json()) as RoomPreference[])
+                : [];
+
+            if (statusesData) {
+                setRooms((currentRooms) =>
+                    currentRooms.map((room) => ({
+                        ...room,
+                        roomDrawStatus: statusesData.statuses[room.id],
+                    }))
+                );
+            }
+            setPreferenceRoomIds(
+                new Set(
+                    preferencesData.map(
+                        (preference) => preference.housing_room_id
+                    )
+                )
+            );
+        } catch (error) {
+            setError(
+                error instanceof Error
+                    ? error.message
+                    : 'Could not save draw priority.'
+            );
+        } finally {
+            setSavingPriority(false);
+        }
     };
 
     const addRoomPreference = async (roomId: number) => {
@@ -421,10 +537,72 @@ export default function DynamicRooms() {
                             Room draw reporting is active.
                         </p>
                         <p className="mt-1 text-sm text-sas-black/70">
-                            Not Taken rooms are shown first. Use the status
-                            filters to quickly scan availability.
+                            {roomDrawRequiresPriority
+                                ? 'Enter your draw priority to view room statuses and manage your ranking.'
+                                : 'Not Taken rooms are shown first. Use the status filters to quickly scan availability.'}
                         </p>
                     </div>
+                )}
+
+                {roomDrawVisible && roomDrawRequiresPriority && user && (
+                    <form
+                        onSubmit={saveRoomDrawPriority}
+                        className="mb-8 rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6"
+                    >
+                        <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
+                            Room Draw Priority
+                        </h2>
+                        <p className="mt-2 text-sm text-sas-black/65">
+                            Initials are not needed because your account identifies
+                            you.
+                        </p>
+                        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                            <label className="block">
+                                <span className="text-sm font-medium text-sas-black/75">
+                                    Year
+                                </span>
+                                <select
+                                    value={priorityForm.classYear}
+                                    onChange={(event) =>
+                                        setPriorityForm((current) => ({
+                                            ...current,
+                                            classYear: event.target.value,
+                                        }))
+                                    }
+                                    className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                >
+                                    <option value="">Select year</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                </select>
+                            </label>
+                            <label className="block">
+                                <span className="text-sm font-medium text-sas-black/75">
+                                    Draw Date
+                                </span>
+                                <input
+                                    type="datetime-local"
+                                    value={priorityForm.drawDate}
+                                    onChange={(event) =>
+                                        setPriorityForm((current) => ({
+                                            ...current,
+                                            drawDate: event.target.value,
+                                        }))
+                                    }
+                                    className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                />
+                            </label>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={savingPriority}
+                            className="mt-5 rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+                        >
+                            {savingPriority ? 'Saving...' : 'Save Priority'}
+                        </button>
+                    </form>
                 )}
 
                 {/* Button to toggle floor plans */}
@@ -486,7 +664,7 @@ export default function DynamicRooms() {
                         {building.name} has {rooms.length} room
                         {rooms.length !== 1 ? 's' : ''}
                     </p>
-                    {user && roomDrawVisible && (
+                    {user && roomDrawVisible && !roomDrawRequiresPriority && (
                         <Link
                             href="/campus/housing/preferences"
                             className="mt-3 inline-flex rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
@@ -518,7 +696,7 @@ export default function DynamicRooms() {
                     )}
                 </div>
 
-                {roomDrawVisible && (
+                {roomDrawVisible && !roomDrawRequiresPriority && (
                     <div className="mb-6 flex flex-wrap gap-2">
                         {(
                             [
@@ -560,7 +738,10 @@ export default function DynamicRooms() {
                                 buildingName={building.name}
                                 room={room}
                                 canViewReviews={!!user}
-                                canReportRoomDraw={roomDrawVisible}
+                                canReportRoomDraw={
+                                    roomDrawVisible &&
+                                    !roomDrawRequiresPriority
+                                }
                                 canOverrideRoomDraw={!!user?.isAdmin}
                                 canMarkRoomTaken={
                                     !currentUserTakenRoom ||
@@ -571,7 +752,11 @@ export default function DynamicRooms() {
                                         ? `You already marked room ${currentUserTakenRoom.room_number} taken. Mark it not taken before choosing another room.`
                                         : undefined
                                 }
-                                canManagePreferences={!!user && roomDrawVisible}
+                                canManagePreferences={
+                                    !!user &&
+                                    roomDrawVisible &&
+                                    !roomDrawRequiresPriority
+                                }
                                 isInPreferenceRanking={preferenceRoomIds.has(
                                     room.id
                                 )}

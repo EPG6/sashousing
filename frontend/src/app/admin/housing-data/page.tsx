@@ -21,6 +21,15 @@ type RoomForm = {
     occupancy_type: string;
     closet_type: string;
     bathroom_type: string;
+    floor: string;
+    eligibleYear: string;
+    sink: string;
+    closet: string;
+    closetType: string;
+    balcony: string;
+    privateBath: string;
+    suiteBath: string;
+    note: string;
 };
 
 const toRoomForm = (room: Room): RoomForm => ({
@@ -30,6 +39,16 @@ const toRoomForm = (room: Room): RoomForm => ({
     occupancy_type: room.occupancy_type ? String(room.occupancy_type) : '',
     closet_type: room.closet_type ? String(room.closet_type) : '',
     bathroom_type: room.bathroom_type ? String(room.bathroom_type) : '',
+    floor: room.floor ? String(room.floor) : '',
+    eligibleYear: room.eligibleYear ? String(room.eligibleYear) : '',
+    sink: room.sink === undefined ? '' : String(room.sink),
+    closet: room.closet === undefined ? '' : String(room.closet),
+    closetType: room.closetType || '',
+    balcony: room.balcony === undefined ? '' : String(room.balcony),
+    privateBath:
+        room.privateBath === undefined ? '' : String(room.privateBath),
+    suiteBath: room.suiteBath === undefined ? '' : String(room.suiteBath),
+    note: room.note || '',
 });
 
 const ROOM_FIELDS = [
@@ -51,6 +70,31 @@ const ROOM_FIELDS = [
         label: 'Bathroom',
         type: 'number' as const,
     },
+    { key: 'floor' as const, label: 'Floor', type: 'number' as const },
+    {
+        key: 'eligibleYear' as const,
+        label: 'Year',
+        type: 'number' as const,
+    },
+    { key: 'sink' as const, label: 'Sink', type: 'text' as const },
+    { key: 'closet' as const, label: 'Closet?', type: 'text' as const },
+    {
+        key: 'closetType' as const,
+        label: 'Closet Type',
+        type: 'text' as const,
+    },
+    { key: 'balcony' as const, label: 'Balcony', type: 'text' as const },
+    {
+        key: 'privateBath' as const,
+        label: 'Private Bath',
+        type: 'text' as const,
+    },
+    {
+        key: 'suiteBath' as const,
+        label: 'Suite Bath',
+        type: 'text' as const,
+    },
+    { key: 'note' as const, label: 'Note', type: 'text' as const },
 ] as const;
 
 export default function HousingDataAdminPage() {
@@ -64,6 +108,7 @@ export default function HousingDataAdminPage() {
         name: '',
         campus: '',
         floors: '',
+        eligibleYear: '',
         description: '',
     });
     const [rooms, setRooms] = useState<Room[]>([]);
@@ -194,6 +239,9 @@ export default function HousingDataAdminPage() {
             name: selectedBuilding.name,
             campus: selectedBuilding.campus,
             floors: String(selectedBuilding.floors),
+            eligibleYear: selectedBuilding.eligibleYear
+                ? String(selectedBuilding.eligibleYear)
+                : '',
             description: selectedBuilding.description || '',
         });
         setEditingBuilding(false);
@@ -262,6 +310,7 @@ export default function HousingDataAdminPage() {
                         name: buildingForm.name,
                         campus: buildingForm.campus,
                         floors: buildingForm.floors,
+                        eligibleYear: buildingForm.eligibleYear,
                         description: buildingForm.description,
                     }),
                 }
@@ -305,6 +354,9 @@ export default function HousingDataAdminPage() {
             name: selectedBuilding.name,
             campus: selectedBuilding.campus,
             floors: String(selectedBuilding.floors),
+            eligibleYear: selectedBuilding.eligibleYear
+                ? String(selectedBuilding.eligibleYear)
+                : '',
             description: selectedBuilding.description || '',
         });
         setEditingBuilding(false);
@@ -611,6 +663,27 @@ export default function HousingDataAdminPage() {
                                                 floors: event.target.value,
                                             }))
                                         }
+                                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className="text-sm font-medium text-sas-black/75">
+                                        Eligible Year
+                                    </span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="4"
+                                        value={buildingForm.eligibleYear}
+                                        disabled={!editingBuilding}
+                                        onChange={(event) =>
+                                            setBuildingForm((current) => ({
+                                                ...current,
+                                                eligibleYear:
+                                                    event.target.value,
+                                            }))
+                                        }
+                                        placeholder="All years"
                                         className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
                                     />
                                 </label>

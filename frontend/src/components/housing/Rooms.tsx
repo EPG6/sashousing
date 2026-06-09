@@ -43,6 +43,14 @@ export const getRoomOccupancyType = (occupancy_type: number | undefined) => {
     }
 };
 
+const formatBooleanFeature = (label: string, value: boolean | undefined) => {
+    if (value === undefined) {
+        return null;
+    }
+
+    return `${label}: ${value ? 'Yes' : 'No'}`;
+};
+
 export const RoomCard = ({
     buildingName,
     room,
@@ -180,6 +188,42 @@ export const RoomCard = ({
                 {room.size && (
                     <p className="text-lg text-sas-black/75">
                         Size: {room.size} sq. ft.
+                    </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2 text-sm text-sas-black/65">
+                    {room.floor && (
+                        <span className="rounded-md bg-sas-mist px-2 py-1">
+                            Floor {room.floor}
+                        </span>
+                    )}
+                    {room.eligibleYear && (
+                        <span className="rounded-md bg-sas-mist px-2 py-1">
+                            Year {room.eligibleYear}
+                        </span>
+                    )}
+                    {[
+                        formatBooleanFeature('Sink', room.sink),
+                        formatBooleanFeature('Closet', room.closet),
+                        room.closetType
+                            ? `Closet: ${room.closetType}`
+                            : null,
+                        formatBooleanFeature('Balcony', room.balcony),
+                        formatBooleanFeature('Private bath', room.privateBath),
+                        formatBooleanFeature('Suite bath', room.suiteBath),
+                    ]
+                        .filter(Boolean)
+                        .map((feature) => (
+                            <span
+                                key={feature}
+                                className="rounded-md bg-sas-mist px-2 py-1"
+                            >
+                                {feature}
+                            </span>
+                        ))}
+                </div>
+                {room.note && (
+                    <p className="mt-3 line-clamp-2 break-words text-sm text-sas-black/65">
+                        {room.note}
                     </p>
                 )}
             </div>

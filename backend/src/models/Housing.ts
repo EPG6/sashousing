@@ -6,6 +6,7 @@ interface IHousingBuildings extends Document {
     name: string;
     campus: string;
     floors: number;
+    eligibleYear?: number;
     description?: string;
 }
 
@@ -29,6 +30,11 @@ const HousingBuildingsSchema = new Schema<IHousingBuildings>({
         default: 1,
         required: true,
     },
+    eligibleYear: {
+        type: Number,
+        min: 1,
+        max: 4,
+    },
     description: {
         type: String,
     },
@@ -45,6 +51,15 @@ interface IHousingRooms extends Document {
     occupancy_type?: number;
     closet_type?: number;
     bathroom_type?: number;
+    floor?: number;
+    eligibleYear?: number;
+    sink?: boolean;
+    closet?: boolean;
+    closetType?: string;
+    balcony?: boolean;
+    privateBath?: boolean;
+    suiteBath?: boolean;
+    note?: string;
     // housing_suite_id?: number; // TODO: DELETE
     housing_building_id: number;
     room_number: string;
@@ -67,6 +82,40 @@ const HousingRoomsSchema = new Schema<IHousingRooms>({
     },
     bathroom_type: {
         type: Number,
+    },
+    floor: {
+        type: Number,
+        min: 1,
+    },
+    eligibleYear: {
+        type: Number,
+        min: 1,
+        max: 4,
+    },
+    sink: {
+        type: Boolean,
+    },
+    closet: {
+        type: Boolean,
+    },
+    closetType: {
+        type: String,
+        trim: true,
+        maxlength: 80,
+    },
+    balcony: {
+        type: Boolean,
+    },
+    privateBath: {
+        type: Boolean,
+    },
+    suiteBath: {
+        type: Boolean,
+    },
+    note: {
+        type: String,
+        trim: true,
+        maxlength: 300,
     },
     // housing_suite_id: { // TODO: DELETE
     //     type: Number,
@@ -191,6 +240,57 @@ const RoomDrawSettings =
         RoomDrawSettingsSchema
     );
 
+interface IRoomDrawParticipant extends Document {
+    user_id: string;
+    user_email: string;
+    user_name?: string;
+    classYear: number;
+    drawDate: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const RoomDrawParticipantSchema = new Schema<IRoomDrawParticipant>(
+    {
+        user_id: {
+            type: String,
+            required: true,
+            unique: true,
+            index: true,
+        },
+        user_email: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true,
+        },
+        user_name: {
+            type: String,
+        },
+        classYear: {
+            type: Number,
+            required: true,
+            min: 1,
+            max: 4,
+        },
+        drawDate: {
+            type: Date,
+            required: true,
+        },
+    },
+    {
+        timestamps: true,
+    }
+);
+
+const RoomDrawParticipants =
+    (mongoose.models
+        .RoomDrawParticipants as mongoose.Model<IRoomDrawParticipant>) ||
+    mongoose.model<IRoomDrawParticipant>(
+        'RoomDrawParticipants',
+        RoomDrawParticipantSchema
+    );
+
 interface IRoomDrawStatus extends Document {
     housing_room_id: number;
     status: 'taken';
@@ -306,6 +406,7 @@ export {
     HousingRooms,
     HousingReviews,
     RoomDrawSettings,
+    RoomDrawParticipants,
     RoomDrawStatuses,
     RoomPreferences,
 };
