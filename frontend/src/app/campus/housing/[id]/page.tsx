@@ -7,7 +7,6 @@ import { useAuth } from '@/hooks/useAuth';
 import {
     Building,
     Room,
-    RoomDrawPriority,
     RoomDrawStatusResponse,
     RoomPreference,
     RoomPreferenceHolder,
@@ -58,8 +57,6 @@ export default function DynamicRooms() {
     const [rooms, setRooms] = useState<Room[]>([]);
     const [building, setBuilding] = useState<Building | null>(null);
     const [roomDrawVisible, setRoomDrawVisible] = useState(false);
-    const [roomDrawPriority, setRoomDrawPriority] =
-        useState<RoomDrawPriority | null>(null);
     const [roomDrawRequiresPriority, setRoomDrawRequiresPriority] =
         useState(false);
     const [priorityForm, setPriorityForm] = useState({
@@ -212,7 +209,6 @@ export default function DynamicRooms() {
 
                 setBuilding(buildingData);
                 setRoomDrawVisible(roomDrawData.isVisible);
-                setRoomDrawPriority(roomDrawData.priority || null);
                 setRoomDrawRequiresPriority(
                     Boolean(roomDrawData.requiresPriority)
                 );
@@ -336,7 +332,6 @@ export default function DynamicRooms() {
             }
 
             const data = await response.json();
-            setRoomDrawPriority(data.priority);
             setRoomDrawRequiresPriority(false);
 
             const buildingId = Number(id);
