@@ -27,9 +27,14 @@ const usesSecureFrontend =
     Boolean(process.env.RENDER_SERVICE_ID) ||
     (process.env.FRONTEND_URL || '').includes('https://');
 const mongoUri = process.env.MONGODB_URI;
+const sessionSecret = process.env.SESSION_SECRET?.trim();
 
 if (!mongoUri) {
     throw new Error('MONGODB_URI is not defined');
+}
+
+if (!sessionSecret) {
+    throw new Error('SESSION_SECRET is not defined');
 }
 
 app.set('trust proxy', 1);
@@ -54,7 +59,7 @@ app.use(express.json());
 
 app.use(
     session({
-        secret: process.env.SESSION_SECRET || 'replace-this-session-secret',
+        secret: sessionSecret,
         resave: false,
         saveUninitialized: false,
         proxy: usesSecureFrontend,
