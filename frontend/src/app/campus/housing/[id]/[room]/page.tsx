@@ -11,9 +11,15 @@ import { Review, RoomWithReviews } from '@/types';
 import { FormattedReviewText } from '@/utils/textFormatting';
 import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
+import { getBuildingSlug } from '@/utils/housingText';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+
+type BuildingSearchDoc = {
+    id: number;
+    name: string;
+};
 
 const RoomPage = () => {
     const params = useParams();
@@ -53,16 +59,41 @@ const RoomPage = () => {
         const fetchReviews = async () => {
             try {
                 setLoading(true);
+                const buildingParam = Array.isArray(id) ? id[0] : id;
+                const roomParam = Array.isArray(room) ? room[0] : room;
+                let buildingId = Number(buildingParam);
+
+                if (Number.isNaN(buildingId)) {
+                    const searchIndexResponse = await fetch(
+                        `${backendUrl}/api/campus/housing/search-index`,
+                        { credentials: 'include' }
+                    );
+                    if (!searchIndexResponse.ok) {
+                        throw new Error('Failed to resolve building');
+                    }
+
+                    const buildings =
+                        (await searchIndexResponse.json()) as BuildingSearchDoc[];
+                    const matchingBuilding = buildings.find(
+                        (building) =>
+                            getBuildingSlug(building.name) === buildingParam
+                    );
+                    if (!matchingBuilding) {
+                        throw new Error('Building not found');
+                    }
+
+                    buildingId = matchingBuilding.id;
+                }
 
                 const [buildingResponse, reviewsResponse] = await Promise.all([
                     fetch(
-                        `${backendUrl}/api/campus/housing/${id}`,
+                        `${backendUrl}/api/campus/housing/${buildingId}`,
                         {
                             credentials: 'include',
                         }
                     ),
                     fetch(
-                        `${backendUrl}/api/campus/housing/${id}/${room}/reviews`,
+                        `${backendUrl}/api/campus/housing/${buildingId}/${roomParam}/reviews`,
                         {
                             credentials: 'include',
                         }

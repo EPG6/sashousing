@@ -1,6 +1,7 @@
 'use client';
 import { RoomCardProps } from '@/types';
 import { getUserSafeMessage } from '@/utils/apiErrors';
+import { getBuildingSlug } from '@/utils/housingText';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -341,7 +342,7 @@ export const RoomCard = ({
             )}
 
             <Link
-                href={`/campus/housing/${room.housing_building_id}/${room.room_number}`}
+                href={`/campus/housing/${getBuildingSlug(buildingName)}/${encodeURIComponent(room.room_number)}`}
                 prefetch={false}
             >
                 <button className="rounded-md border border-sas-green px-6 py-2 font-medium text-sas-green transition-colors hover:bg-sas-green hover:text-sas-white">
