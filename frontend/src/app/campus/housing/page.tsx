@@ -8,6 +8,10 @@ import { backendUrl } from '@/utils/api';
 import SiteHeader from '@/components/SiteHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { RoomDrawSettings } from '@/types';
+import {
+    getBuildingDisplayDescription,
+    getBuildingSlug,
+} from '@/utils/housingText';
 
 type BuildingDoc = {
     id: number;
@@ -21,7 +25,6 @@ type BuildingDoc = {
 type BuildingCard = {
     id: number;
     name: string;
-    image: string;
     description: string;
     floors: number;
     roomNumbers: string[];
@@ -33,19 +36,12 @@ type CampusGroup = {
 };
 
 const BuildingImage = ({ building }: { building: BuildingCard }) => {
-    const [imageSrc, setImageSrc] = useState(building.image);
-
-    useEffect(() => {
-        setImageSrc(building.image);
-    }, [building.image]);
-
     return (
         <Image
-            src={imageSrc}
+            src="/housing/accommodation-hero.jpg"
             alt={building.name}
             width={800}
             height={400}
-            onError={() => setImageSrc('/housing/accommodation-hero.jpg')}
             className="w-full h-48 object-cover"
         />
     );
@@ -94,11 +90,7 @@ const HousingPage = () => {
                         const buildingCard: BuildingCard = {
                             id: building.id,
                             name: building.name,
-                            image: `/buildings/${building.name
-                                .toLowerCase()
-                                .replace(/\s+/g, '-')
-                                .replace(/-+/g, '-')}.jpg`,
-                            description: building.description,
+                            description: getBuildingDisplayDescription(building),
                             floors: building.floors,
                             roomNumbers: building.roomNumbers || [],
                         };
@@ -243,7 +235,9 @@ const HousingPage = () => {
                                     <Link
                                         key={building.id}
                                         href={{
-                                            pathname: `/campus/housing/${building.id}`,
+                                            pathname: `/campus/housing/${getBuildingSlug(
+                                                building.name
+                                            )}`,
                                             query:
                                                 matchingRooms.length > 0
                                                     ? {

@@ -14,12 +14,20 @@ import {
 } from '@/types';
 import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
+import {
+    getBuildingDisplayDescription,
+    getBuildingSlug,
+} from '@/utils/housingText';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 type RoomDrawStatusFilter = 'all' | 'not_taken' | 'taken';
+
+type BuildingSearchDoc = Building & {
+    roomNumbers: string[];
+};
 
 const toDateTimeInputValue = (value?: string | Date | null) => {
     if (!value) {
@@ -62,10 +70,7 @@ export default function DynamicRooms() {
     const [preferenceRoomIds, setPreferenceRoomIds] = useState<Set<number>>(
         new Set()
     );
-    const [safeName, setSafeName] = useState<string>('');
-    const [imageErrored, setImageErrored] = useState(false);
     const { user, loading: authLoading } = useAuth();
-    const [showFloorPlans, setShowFloorPlans] = useState(false);
     const [roomSearchQuery, setRoomSearchQuery] = useState('');
     const [roomDrawStatusFilter, setRoomDrawStatusFilter] =
         useState<RoomDrawStatusFilter>('all');
@@ -76,11 +81,32 @@ export default function DynamicRooms() {
                 setLoading(true);
                 setBuildingNotFound(false);
 
-                const buildingId = Number(id);
-                if (isNaN(buildingId)) {
-                    setBuildingNotFound(true);
-                    setError('Invalid building ID format');
-                    return;
+                const buildingParam = Array.isArray(id) ? id[0] : id;
+                let buildingId = Number(buildingParam);
+
+                if (Number.isNaN(buildingId)) {
+                    const searchIndexResponse = await fetch(
+                        `${backendUrl}/api/campus/housing/search-index`,
+                        { credentials: 'include' }
+                    );
+                    if (!searchIndexResponse.ok) {
+                        throw new Error('Failed to resolve building');
+                    }
+
+                    const buildings =
+                        (await searchIndexResponse.json()) as BuildingSearchDoc[];
+                    const matchingBuilding = buildings.find(
+                        (building) =>
+                            getBuildingSlug(building.name) === buildingParam
+                    );
+
+                    if (!matchingBuilding) {
+                        setBuildingNotFound(true);
+                        setError('Building not found');
+                        return;
+                    }
+
+                    buildingId = matchingBuilding.id;
                 }
 
                 const requests = [
@@ -185,14 +211,6 @@ export default function DynamicRooms() {
                         : {};
 
                 setBuilding(buildingData);
-                setSafeName(
-                    buildingData.name
-                        .toLowerCase()
-                        .replace(/\s+/g, '-')
-                        .replace(/-+/g, '-')
-                );
-                setImageErrored(false);
-
                 setRoomDrawVisible(roomDrawData.isVisible);
                 setRoomDrawPriority(roomDrawData.priority || null);
                 setRoomDrawRequiresPriority(
@@ -592,19 +610,14 @@ export default function DynamicRooms() {
                     {building.name}
                 </h1>
                 <Image
-                    src={
-                        imageErrored
-                            ? '/housing/accommodation-hero.jpg'
-                            : `/buildings/${safeName}.jpg`
-                    }
+                    src="/housing/accommodation-hero.jpg"
                     width={800}
                     height={400}
                     alt={building.name}
-                    onError={() => setImageErrored(true)}
                     className="mb-6 max-h-[500px] w-full rounded-md object-cover"
                 />
                 <p className="mb-4 text-lg text-sas-black/75">
-                    {building.description}
+                    {getBuildingDisplayDescription(building)}
                 </p>
 
                 {roomDrawVisible && (
@@ -679,57 +692,6 @@ export default function DynamicRooms() {
                             {savingPriority ? 'Saving...' : 'Save Priority'}
                         </button>
                     </form>
-                )}
-
-                {/* Button to toggle floor plans */}
-                <button
-                    onClick={() => setShowFloorPlans(!showFloorPlans)}
-                    className="mb-4 rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white transition-colors hover:bg-sas-black"
-                >
-                    {showFloorPlans ? 'Hide Floor Plans' : 'Show Floor Plans'}
-                </button>
-
-                {/* Conditionally render floor plans */}
-                {showFloorPlans && (
-                    <div className="mb-8">
-                        <h2 className="mb-4 font-display text-xl font-semibold text-sas-green sm:text-2xl">
-                            Floor Plans
-                        </h2>
-                        <div className="grid gap-6 pb-6 grid-cols-1 sm:grid-cols-2">
-                            {Array.from({ length: building.floors }).map(
-                                (_, i) => {
-                                    const isLastInOddSet =
-                                        building.floors % 2 !== 0 &&
-                                        i === building.floors - 1;
-                                    const isOnlyOne = building.floors === 1;
-                                    const shouldSpanAndCenter =
-                                        isLastInOddSet || isOnlyOne;
-                                    return (
-                                        <div
-                                            key={i}
-                                            className={`${
-                                                shouldSpanAndCenter
-                                                    ? 'sm:col-span-2 flex justify-center'
-                                                    : ''
-                                            }`}
-                                        >
-                                            <Image
-                                                src={`/floorplans/${safeName}-floor${i + 1}.jpg`}
-                                                width={800}
-                                                height={400}
-                                                alt={`Floor plan ${i + 1}`}
-                                                className={`h-auto w-full rounded-md border border-sas-line shadow-sm ${
-                                                    shouldSpanAndCenter
-                                                        ? 'sm:max-w-2xl'
-                                                        : ''
-                                                }`}
-                                            />
-                                        </div>
-                                    );
-                                }
-                            )}
-                        </div>
-                    </div>
                 )}
 
                 <div className="mb-8">
