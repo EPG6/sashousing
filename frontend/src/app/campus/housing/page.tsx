@@ -3,15 +3,17 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
-import Loading from '@/components/Loading';
+import { BuildingCardSkeleton } from '@/components/Skeleton';
 import { backendUrl } from '@/utils/api';
 import SiteHeader from '@/components/SiteHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { RoomDrawSettings } from '@/types';
 import {
     getBuildingDisplayDescription,
+    getBuildingImagePath,
     getBuildingSlug,
 } from '@/utils/housingText';
+import { useRouter } from 'next/navigation';
 
 type BuildingDoc = {
     id: number;
@@ -38,7 +40,7 @@ type CampusGroup = {
 const BuildingImage = ({ building }: { building: BuildingCard }) => {
     return (
         <Image
-            src="/housing/accommodation-hero.jpg"
+            src={getBuildingImagePath(building.name)}
             alt={building.name}
             width={800}
             height={400}
@@ -48,6 +50,7 @@ const BuildingImage = ({ building }: { building: BuildingCard }) => {
 };
 
 const HousingPage = () => {
+    const router = useRouter();
     const { user, loading: authLoading } = useAuth();
     const [housingData, setHousingData] = useState<CampusGroup[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -126,6 +129,12 @@ const HousingPage = () => {
         fetchHousingData();
     }, []);
 
+    useEffect(() => {
+        if (user && roomDrawVisible) {
+            router.prefetch('/campus/housing/preferences');
+        }
+    }, [roomDrawVisible, router, user]);
+
     const filteredHousingData = useMemo(() => {
         if (searchTokens.length === 0) {
             return housingData;
@@ -170,8 +179,40 @@ const HousingPage = () => {
             .slice(0, 5);
     };
 
+    const getBuildingHref = (building: BuildingCard) => {
+        const matchingRooms = getMatchingRoomNumbers(building);
+        const pathname = `/campus/housing/${getBuildingSlug(building.name)}`;
+
+        return matchingRooms.length > 0
+            ? `${pathname}?roomSearch=${encodeURIComponent(matchingRooms[0])}`
+            : pathname;
+    };
+
     if (loading || authLoading) {
-        return <Loading />;
+        return (
+            <div className="min-h-screen bg-sas-mist text-sas-black">
+                <SiteHeader />
+                <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+                    <div className="mb-10 border-b border-sas-line pb-5">
+                        <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">
+                            SAS Housing Reviews
+                        </h1>
+                        <p className="mt-2 max-w-2xl text-sas-black/70">
+                            Browse residence halls and room reviews from the
+                            student community.
+                        </p>
+                    </div>
+                    <div className="mb-8 max-w-xl">
+                        <div className="h-12 rounded-md border border-sas-line bg-sas-white" />
+                    </div>
+                    <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+                        {Array.from({ length: 6 }).map((_, index) => (
+                            <BuildingCardSkeleton key={index} />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (error) {
@@ -230,22 +271,17 @@ const HousingPage = () => {
                             {campus.buildings.map((building) => {
                                 const matchingRooms =
                                     getMatchingRoomNumbers(building);
+                                const href = getBuildingHref(building);
 
                                 return (
                                     <Link
                                         key={building.id}
-                                        href={{
-                                            pathname: `/campus/housing/${getBuildingSlug(
-                                                building.name
-                                            )}`,
-                                            query:
-                                                matchingRooms.length > 0
-                                                    ? {
-                                                          roomSearch:
-                                                              matchingRooms[0],
-                                                      }
-                                                    : {},
-                                        }}
+                                        href={href}
+                                        prefetch={false}
+                                        onMouseEnter={() =>
+                                            router.prefetch(href)
+                                        }
+                                        onFocus={() => router.prefetch(href)}
                                         className="block overflow-hidden rounded-md border border-sas-line bg-sas-white shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-sas-green"
                                     >
                                         <BuildingImage building={building} />

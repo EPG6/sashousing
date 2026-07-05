@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/next';
 import SiteFooter from '@/components/SiteFooter';
 import './globals.css';
@@ -27,6 +28,11 @@ export default function RootLayout({
                 {children}
                 <SiteFooter />
                 <Analytics />
+
+                <Script
+                    src="https://accounts.google.com/gsi/client"
+                    strategy="afterInteractive"
+                />
             </body>
         </html>
     );

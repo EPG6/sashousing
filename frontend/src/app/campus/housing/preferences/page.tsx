@@ -41,6 +41,12 @@ const serializeActivePreferences = (preferences: RoomPreference[]) =>
         }))
     );
 
+type RoomDrawSettingsEvent = {
+    startsAt: string | null;
+    endsAt: string | null;
+    isVisible: boolean;
+};
+
 export default function RoomPreferencesPage() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
@@ -181,6 +187,79 @@ export default function RoomPreferencesPage() {
     const hasUnsavedEdits =
         (editingRanking && rankingHasChanges) ||
         (editingPriority && priorityHasChanges);
+
+    useEffect(() => {
+        if (!user || !roomDrawVisible || roomDrawRequiresPriority) {
+            return;
+        }
+
+        const eventSource = new EventSource(
+            `${backendUrl}/api/campus/housing/room-preferences/events`,
+            { withCredentials: true }
+        );
+
+        const handleUserPreferenceEvent = () => {
+            if (hasUnsavedEdits) {
+                setMessage(
+                    'Your room ranking changed elsewhere. Save or cancel your edits, then refresh to see the latest ranking.'
+                );
+                return;
+            }
+
+            void loadPreferences();
+        };
+
+        eventSource.addEventListener(
+            'user-preferences-changed',
+            handleUserPreferenceEvent
+        );
+
+        return () => {
+            eventSource.removeEventListener(
+                'user-preferences-changed',
+                handleUserPreferenceEvent
+            );
+            eventSource.close();
+        };
+    }, [hasUnsavedEdits, roomDrawRequiresPriority, roomDrawVisible, user]);
+
+    useEffect(() => {
+        const eventSource = new EventSource(
+            `${backendUrl}/api/campus/housing/room-draw/settings-events`,
+            { withCredentials: true }
+        );
+
+        const handleSettingsEvent = (event: MessageEvent<string>) => {
+            let data: RoomDrawSettingsEvent;
+            try {
+                data = JSON.parse(event.data) as RoomDrawSettingsEvent;
+            } catch {
+                return;
+            }
+
+            setRoomDrawVisible(data.isVisible);
+            if (!data.isVisible) {
+                setRoomDrawRequiresPriority(false);
+                if (!hasUnsavedEdits) {
+                    setPreferences([]);
+                    setSavedPreferences([]);
+                }
+            }
+        };
+
+        eventSource.addEventListener(
+            'room-draw-settings',
+            handleSettingsEvent as EventListener
+        );
+
+        return () => {
+            eventSource.removeEventListener(
+                'room-draw-settings',
+                handleSettingsEvent as EventListener
+            );
+            eventSource.close();
+        };
+    }, [hasUnsavedEdits]);
 
     useEffect(() => {
         if (!hasUnsavedEdits) {
@@ -325,6 +404,11 @@ export default function RoomPreferencesPage() {
         setMessage(null);
         setError(null);
         const activePreferences = getActivePreferences(preferences);
+        const previousSavedPreferences = savedPreferences;
+        const optimisticSavedPreferences = preferences;
+        setSavedPreferences(optimisticSavedPreferences);
+        setEditingRanking(false);
+        setMessage('Room ranking saved.');
 
         try {
             const response = await fetch(
@@ -353,11 +437,11 @@ export default function RoomPreferencesPage() {
                 );
             }
 
-            setSavedPreferences(preferences);
-            setEditingRanking(false);
-            setMessage('Room ranking saved.');
+            await loadPreferences();
         } catch (error) {
             console.error('Room preference save error:', error);
+            setSavedPreferences(previousSavedPreferences);
+            setEditingRanking(true);
             setError(
                 getUserSafeMessage(
                     error instanceof Error ? error.message : null,

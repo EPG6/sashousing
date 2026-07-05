@@ -129,6 +129,8 @@ export interface RoomCardProps {
 
 export interface ReviewFormProps {
     review: Review | null;
+    buildingId: number;
+    roomNumber: string;
 }
 
 export interface RoomPreference {
