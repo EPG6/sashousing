@@ -496,6 +496,11 @@ export default function HousingDataAdminPage() {
         null
     );
 
+    useEffect(() => {
+        router.prefetch('/admin/room-draw');
+        router.prefetch('/admin/room-preferences');
+    }, [router]);
+
     const selectedBuilding = useMemo(
         () =>
             buildings.find((building) => building.id === selectedBuildingId) ||

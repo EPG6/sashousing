@@ -374,6 +374,12 @@ export default function DynamicRooms() {
         setRoomSearchQuery(initialRoomSearchQuery);
     }, [initialRoomSearchQuery]);
 
+    useEffect(() => {
+        if (user && roomDrawVisible && !roomDrawRequiresPriority) {
+            router.prefetch('/campus/housing/preferences');
+        }
+    }, [roomDrawRequiresPriority, roomDrawVisible, router, user]);
+
     const refreshRoomDrawStatuses = useCallback(async () => {
         if (resolvedBuildingId === null) {
             return;

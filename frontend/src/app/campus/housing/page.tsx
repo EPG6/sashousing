@@ -13,6 +13,7 @@ import {
     getBuildingImagePath,
     getBuildingSlug,
 } from '@/utils/housingText';
+import { useRouter } from 'next/navigation';
 
 type BuildingDoc = {
     id: number;
@@ -49,6 +50,7 @@ const BuildingImage = ({ building }: { building: BuildingCard }) => {
 };
 
 const HousingPage = () => {
+    const router = useRouter();
     const { user, loading: authLoading } = useAuth();
     const [housingData, setHousingData] = useState<CampusGroup[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -127,6 +129,12 @@ const HousingPage = () => {
         fetchHousingData();
     }, []);
 
+    useEffect(() => {
+        if (user && roomDrawVisible) {
+            router.prefetch('/campus/housing/preferences');
+        }
+    }, [roomDrawVisible, router, user]);
+
     const filteredHousingData = useMemo(() => {
         if (searchTokens.length === 0) {
             return housingData;
@@ -169,6 +177,15 @@ const HousingPage = () => {
                 );
             })
             .slice(0, 5);
+    };
+
+    const getBuildingHref = (building: BuildingCard) => {
+        const matchingRooms = getMatchingRoomNumbers(building);
+        const pathname = `/campus/housing/${getBuildingSlug(building.name)}`;
+
+        return matchingRooms.length > 0
+            ? `${pathname}?roomSearch=${encodeURIComponent(matchingRooms[0])}`
+            : pathname;
     };
 
     if (loading || authLoading) {
@@ -254,22 +271,17 @@ const HousingPage = () => {
                             {campus.buildings.map((building) => {
                                 const matchingRooms =
                                     getMatchingRoomNumbers(building);
+                                const href = getBuildingHref(building);
 
                                 return (
                                     <Link
                                         key={building.id}
-                                        href={{
-                                            pathname: `/campus/housing/${getBuildingSlug(
-                                                building.name
-                                            )}`,
-                                            query:
-                                                matchingRooms.length > 0
-                                                    ? {
-                                                          roomSearch:
-                                                              matchingRooms[0],
-                                                      }
-                                                    : {},
-                                        }}
+                                        href={href}
+                                        prefetch={false}
+                                        onMouseEnter={() =>
+                                            router.prefetch(href)
+                                        }
+                                        onFocus={() => router.prefetch(href)}
                                         className="block overflow-hidden rounded-md border border-sas-line bg-sas-white shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-sas-green"
                                     >
                                         <BuildingImage building={building} />

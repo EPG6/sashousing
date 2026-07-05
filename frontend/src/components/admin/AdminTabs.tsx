@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 type AdminTabsProps = {
     activeTab: 'housing-data' | 'room-draw' | 'room-preferences';
@@ -26,6 +27,8 @@ const tabs = [
 ] as const;
 
 export default function AdminTabs({ activeTab, onNavigate }: AdminTabsProps) {
+    const router = useRouter();
+
     return (
         <nav className="mb-8 flex gap-2 border-b border-sas-line pb-3">
             {tabs.map((tab) => {
@@ -35,6 +38,9 @@ export default function AdminTabs({ activeTab, onNavigate }: AdminTabsProps) {
                     <Link
                         key={tab.id}
                         href={tab.href}
+                        prefetch={false}
+                        onMouseEnter={() => router.prefetch(tab.href)}
+                        onFocus={() => router.prefetch(tab.href)}
                         onClick={(event) => {
                             if (!onNavigate) {
                                 return;

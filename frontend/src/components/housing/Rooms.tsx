@@ -3,6 +3,7 @@ import { RoomCardProps } from '@/types';
 import { getUserSafeMessage } from '@/utils/apiErrors';
 import { getBuildingSlug } from '@/utils/housingText';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { memo, useState } from 'react';
 
 export const StarRating = ({ rating }: { rating: number }) => {
@@ -100,6 +101,7 @@ export const RoomCard = memo(function RoomCard({
     onRemovePreference,
     onRoomDrawStatusChange,
 }: RoomCardProps) {
+    const router = useRouter();
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [updatingPreference, setUpdatingPreference] = useState(false);
     const [preferenceMessage, setPreferenceMessage] = useState<string | null>(
@@ -153,6 +155,10 @@ export const RoomCard = memo(function RoomCard({
     const roomDrawBadgeClasses = isTaken
         ? 'border-red-200 bg-red-100 text-red-800'
         : 'border-sas-green/30 bg-sas-green text-sas-white';
+    const reviewHref = `/campus/housing/${getBuildingSlug(buildingName)}/${encodeURIComponent(room.room_number)}`;
+    const prefetchReviewPage = () => {
+        router.prefetch(reviewHref);
+    };
 
     const changeRoomDrawStatus = async (nextStatus: 'taken' | 'not_taken') => {
         if (!onRoomDrawStatusChange) {
@@ -374,8 +380,10 @@ export const RoomCard = memo(function RoomCard({
             )}
 
             <Link
-                href={`/campus/housing/${getBuildingSlug(buildingName)}/${encodeURIComponent(room.room_number)}`}
+                href={reviewHref}
                 prefetch={false}
+                onMouseEnter={prefetchReviewPage}
+                onFocus={prefetchReviewPage}
             >
                 <button className="rounded-md border border-sas-green px-6 py-2 font-medium text-sas-green transition-colors hover:bg-sas-green hover:text-sas-white">
                     {canViewReviews ? 'View Reviews' : 'Sign in to View Reviews'}
