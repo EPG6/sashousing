@@ -36,6 +36,11 @@ type RoomDrawSettingsEvent = {
     isVisible: boolean;
 };
 
+type PriorityFormState = {
+    classYear: string;
+    drawDate: string;
+};
+
 const toDateTimeInputValue = (value?: string | Date | null) => {
     if (!value) {
         return '';
@@ -156,7 +161,6 @@ export default function DynamicRooms() {
     const [preferenceRoomIds, setPreferenceRoomIds] = useState<Set<number>>(
         new Set()
     );
-    const { user, loading: authLoading } = useAuth();
     const [roomSearchQuery, setRoomSearchQuery] = useState('');
     const [roomDrawStatusFilter, setRoomDrawStatusFilter] =
         useState<RoomDrawStatusFilter>('all');
@@ -319,12 +323,6 @@ export default function DynamicRooms() {
     useEffect(() => {
         setRoomSearchQuery(initialRoomSearchQuery);
     }, [initialRoomSearchQuery]);
-
-    useEffect(() => {
-        if (user && roomDrawVisible && !roomDrawRequiresPriority) {
-            router.prefetch('/campus/housing/preferences');
-        }
-    }, [roomDrawRequiresPriority, roomDrawVisible, router, user]);
 
     const refreshRoomDrawStatuses = useCallback(async () => {
         if (resolvedBuildingId === null) {
@@ -615,56 +613,6 @@ export default function DynamicRooms() {
     }, [resolvedBuildingId]);
 
     useEffect(() => {
-        if (authLoading || !user || !roomDrawVisible || roomDrawRequiresPriority) {
-            return;
-        }
-
-        void refreshRoomDrawStatuses();
-        void refreshRoomPreferences();
-    }, [
-        authLoading,
-        refreshRoomDrawStatuses,
-        refreshRoomPreferences,
-        roomDrawRequiresPriority,
-        roomDrawVisible,
-        user,
-    ]);
-
-    useEffect(() => {
-        if (!user || !roomDrawVisible || roomDrawRequiresPriority || resolvedBuildingId === null) {
-            return;
-        }
-
-        const eventSource = new EventSource(
-            `${backendUrl}/api/campus/housing/${resolvedBuildingId}/room-preferences/events`,
-            { withCredentials: true }
-        );
-
-        const handlePreferenceEvent = () => {
-            void refreshRoomPreferences();
-        };
-
-        eventSource.addEventListener(
-            'room-preferences-changed',
-            handlePreferenceEvent
-        );
-
-        return () => {
-            eventSource.removeEventListener(
-                'room-preferences-changed',
-                handlePreferenceEvent
-            );
-            eventSource.close();
-        };
-    }, [
-        refreshRoomPreferences,
-        resolvedBuildingId,
-        roomDrawRequiresPriority,
-        roomDrawVisible,
-        user,
-    ]);
-
-    useEffect(() => {
         const eventSource = new EventSource(
             `${backendUrl}/api/campus/housing/room-draw/settings-events`,
             { withCredentials: true }
@@ -786,7 +734,7 @@ export default function DynamicRooms() {
     const displayedRooms = useMemo(() => {
         const normalizedQuery = roomSearchQuery.trim().toLowerCase();
 
-        const filtered = rooms.filter((room) => {
+        return rooms.filter((room) => {
             const isRoomTaken = room.roomDrawStatus?.status === 'taken';
             if (
                 roomDrawVisible &&
@@ -826,38 +774,11 @@ export default function DynamicRooms() {
                 .toLowerCase()
                 .includes(normalizedQuery);
         });
-
-        if (!roomDrawVisible) {
-            return filtered;
-        }
-
-        return [...filtered].sort((a, b) => {
-            if (!user?.isAdmin) {
-                const aIsUserTakenRoom = Boolean(a.roomDrawStatus?.isOwner);
-                const bIsUserTakenRoom = Boolean(b.roomDrawStatus?.isOwner);
-
-                if (aIsUserTakenRoom !== bIsUserTakenRoom) {
-                    return aIsUserTakenRoom ? -1 : 1;
-                }
-            }
-
-            const aTaken = a.roomDrawStatus?.status === 'taken';
-            const bTaken = b.roomDrawStatus?.status === 'taken';
-
-            if (aTaken === bTaken) {
-                return a.room_number.localeCompare(b.room_number, undefined, {
-                    numeric: true,
-                });
-            }
-
-            return aTaken ? 1 : -1;
-        });
     }, [
         rooms,
         roomSearchQuery,
         roomDrawStatusFilter,
         roomDrawVisible,
-        user?.isAdmin,
     ]);
 
     const takenRoomCount = useMemo(
@@ -867,16 +788,6 @@ export default function DynamicRooms() {
         [rooms]
     );
     const notTakenRoomCount = rooms.length - takenRoomCount;
-    const currentUserTakenRoom = useMemo(
-        () =>
-            user?.isAdmin
-                ? null
-                : rooms.find((room) => room.roomDrawStatus?.isOwner) || null,
-        [rooms, user?.isAdmin]
-    );
-    const currentUserTakenRoomMessage = currentUserTakenRoom
-        ? `You already marked room ${currentUserTakenRoom.room_number} taken. Mark it not taken before choosing another room.`
-        : undefined;
     const floorPlanPaths = building
         ? getBuildingFloorPlanPaths(building.name)
         : [];
@@ -1015,66 +926,14 @@ export default function DynamicRooms() {
                     </div>
                 )}
 
-                {roomDrawVisible && roomDrawRequiresPriority && user && (
-                    <form
-                        onSubmit={saveRoomDrawPriority}
-                        className="mb-8 rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6"
-                    >
-                        <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
-                            Room Draw Priority
-                        </h2>
-                        <p className="mt-2 text-sm text-sas-black/65">
-                            Initials are not needed because your account identifies
-                            you.
-                        </p>
-                        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                            <label className="block">
-                                <span className="text-sm font-medium text-sas-black/75">
-                                    Year
-                                </span>
-                                <select
-                                    value={priorityForm.classYear}
-                                    onChange={(event) =>
-                                        setPriorityForm((current) => ({
-                                            ...current,
-                                            classYear: event.target.value,
-                                        }))
-                                    }
-                                    className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                >
-                                    <option value="">Select year</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                    <option value="4">4</option>
-                                </select>
-                            </label>
-                            <label className="block">
-                                <span className="text-sm font-medium text-sas-black/75">
-                                    Draw Date
-                                </span>
-                                <input
-                                    type="datetime-local"
-                                    value={priorityForm.drawDate}
-                                    onChange={(event) =>
-                                        setPriorityForm((current) => ({
-                                            ...current,
-                                            drawDate: event.target.value,
-                                        }))
-                                    }
-                                    className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                />
-                            </label>
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={savingPriority}
-                            className="mt-5 rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
-                        >
-                            {savingPriority ? 'Saving...' : 'Save Priority'}
-                        </button>
-                    </form>
-                )}
+                <RoomDrawPriorityForm
+                    isVisible={roomDrawVisible}
+                    requiresPriority={roomDrawRequiresPriority}
+                    priorityForm={priorityForm}
+                    savingPriority={savingPriority}
+                    onPriorityFormChange={setPriorityForm}
+                    onSubmit={saveRoomDrawPriority}
+                />
 
                 <div className="mb-8">
                     <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-3xl">
@@ -1084,14 +943,10 @@ export default function DynamicRooms() {
                         {building.name} has {rooms.length} room
                         {rooms.length !== 1 ? 's' : ''}
                     </p>
-                    {user && roomDrawVisible && !roomDrawRequiresPriority && (
-                        <Link
-                            href="/campus/housing/preferences"
-                            className="mt-3 inline-flex rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
-                        >
-                            View My Ranking
-                        </Link>
-                    )}
+                    <RoomDrawRankingLink
+                        roomDrawVisible={roomDrawVisible}
+                        roomDrawRequiresPriority={roomDrawRequiresPriority}
+                    />
                 </div>
 
                 <div className="mb-6 max-w-xl">
@@ -1152,38 +1007,21 @@ export default function DynamicRooms() {
 
                 {rooms.length > 0 && displayedRooms.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {displayedRooms.map((room) => (
-                            <RoomCard
-                                key={room.id}
-                                buildingName={building.name}
-                                room={room}
-                                canViewReviews={!!user}
-                                canReportRoomDraw={
-                                    roomDrawVisible &&
-                                    !roomDrawRequiresPriority
-                                }
-                                canOverrideRoomDraw={!!user?.isAdmin}
-                                canMarkRoomTaken={
-                                    !currentUserTakenRoom ||
-                                    currentUserTakenRoom.id === room.id
-                                }
-                                roomTakenDisabledMessage={
-                                    currentUserTakenRoomMessage
-                                }
-                                canManagePreferences={
-                                    !!user &&
-                                    roomDrawVisible &&
-                                    !roomDrawRequiresPriority
-                                }
-                                isInPreferenceRanking={preferenceRoomIds.has(
-                                    room.id
-                                )}
-                                nextPreferenceRank={preferenceRoomIds.size + 1}
-                                onAddPreference={addRoomPreference}
-                                onRemovePreference={removeRoomPreference}
-                                onRoomDrawStatusChange={updateRoomDrawStatus}
-                            />
-                        ))}
+                        <AuthenticatedRoomGrid
+                            buildingName={building.name}
+                            rooms={displayedRooms}
+                            allRooms={rooms}
+                            roomDrawVisible={roomDrawVisible}
+                            roomDrawRequiresPriority={roomDrawRequiresPriority}
+                            preferenceRoomIds={preferenceRoomIds}
+                            nextPreferenceRank={preferenceRoomIds.size + 1}
+                            resolvedBuildingId={resolvedBuildingId}
+                            onAddPreference={addRoomPreference}
+                            onRemovePreference={removeRoomPreference}
+                            onRoomDrawStatusChange={updateRoomDrawStatus}
+                            onRefreshRoomDrawStatuses={refreshRoomDrawStatuses}
+                            onRefreshRoomPreferences={refreshRoomPreferences}
+                        />
                     </div>
                 ) : rooms.length > 0 ? (
                     <div className="rounded-md border border-sas-line bg-sas-white py-12 text-center">
@@ -1221,5 +1059,284 @@ export default function DynamicRooms() {
                 </div>
             )}
         </div>
+    );
+}
+
+type RoomDrawPriorityFormProps = {
+    isVisible: boolean;
+    requiresPriority: boolean;
+    priorityForm: PriorityFormState;
+    savingPriority: boolean;
+    onPriorityFormChange: React.Dispatch<React.SetStateAction<PriorityFormState>>;
+    onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+};
+
+function RoomDrawPriorityForm({
+    isVisible,
+    requiresPriority,
+    priorityForm,
+    savingPriority,
+    onPriorityFormChange,
+    onSubmit,
+}: RoomDrawPriorityFormProps) {
+    const { user } = useAuth();
+
+    if (!isVisible || !requiresPriority || !user) {
+        return null;
+    }
+
+    return (
+        <form
+            onSubmit={onSubmit}
+            className="mb-8 rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6"
+        >
+            <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
+                Room Draw Priority
+            </h2>
+            <p className="mt-2 text-sm text-sas-black/65">
+                Initials are not needed because your account identifies you.
+            </p>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                    <span className="text-sm font-medium text-sas-black/75">
+                        Year
+                    </span>
+                    <select
+                        value={priorityForm.classYear}
+                        onChange={(event) =>
+                            onPriorityFormChange((current) => ({
+                                ...current,
+                                classYear: event.target.value,
+                            }))
+                        }
+                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    >
+                        <option value="">Select year</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                </label>
+                <label className="block">
+                    <span className="text-sm font-medium text-sas-black/75">
+                        Draw Date
+                    </span>
+                    <input
+                        type="datetime-local"
+                        value={priorityForm.drawDate}
+                        onChange={(event) =>
+                            onPriorityFormChange((current) => ({
+                                ...current,
+                                drawDate: event.target.value,
+                            }))
+                        }
+                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                </label>
+            </div>
+            <button
+                type="submit"
+                disabled={savingPriority}
+                className="mt-5 rounded-md bg-sas-green px-5 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+            >
+                {savingPriority ? 'Saving...' : 'Save Priority'}
+            </button>
+        </form>
+    );
+}
+
+function RoomDrawRankingLink({
+    roomDrawVisible,
+    roomDrawRequiresPriority,
+}: {
+    roomDrawVisible: boolean;
+    roomDrawRequiresPriority: boolean;
+}) {
+    const router = useRouter();
+    const { user } = useAuth();
+
+    useEffect(() => {
+        if (user && roomDrawVisible && !roomDrawRequiresPriority) {
+            router.prefetch('/campus/housing/preferences');
+        }
+    }, [roomDrawRequiresPriority, roomDrawVisible, router, user]);
+
+    if (!user || !roomDrawVisible || roomDrawRequiresPriority) {
+        return null;
+    }
+
+    return (
+        <Link
+            href="/campus/housing/preferences"
+            className="mt-3 inline-flex rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+        >
+            View My Ranking
+        </Link>
+    );
+}
+
+type AuthenticatedRoomGridProps = {
+    buildingName: string;
+    rooms: Room[];
+    allRooms: Room[];
+    roomDrawVisible: boolean;
+    roomDrawRequiresPriority: boolean;
+    preferenceRoomIds: Set<number>;
+    nextPreferenceRank: number;
+    resolvedBuildingId: number | null;
+    onAddPreference: (roomId: number) => Promise<void>;
+    onRemovePreference: (roomId: number) => Promise<void>;
+    onRoomDrawStatusChange: (
+        roomId: number,
+        nextStatus: 'taken' | 'not_taken'
+    ) => Promise<void>;
+    onRefreshRoomDrawStatuses: () => Promise<void>;
+    onRefreshRoomPreferences: () => Promise<void>;
+};
+
+function AuthenticatedRoomGrid({
+    buildingName,
+    rooms,
+    allRooms,
+    roomDrawVisible,
+    roomDrawRequiresPriority,
+    preferenceRoomIds,
+    nextPreferenceRank,
+    resolvedBuildingId,
+    onAddPreference,
+    onRemovePreference,
+    onRoomDrawStatusChange,
+    onRefreshRoomDrawStatuses,
+    onRefreshRoomPreferences,
+}: AuthenticatedRoomGridProps) {
+    const { user, loading: authLoading } = useAuth();
+
+    useEffect(() => {
+        if (
+            authLoading ||
+            !user ||
+            !roomDrawVisible ||
+            roomDrawRequiresPriority
+        ) {
+            return;
+        }
+
+        void onRefreshRoomDrawStatuses();
+        void onRefreshRoomPreferences();
+    }, [
+        authLoading,
+        onRefreshRoomDrawStatuses,
+        onRefreshRoomPreferences,
+        roomDrawRequiresPriority,
+        roomDrawVisible,
+        user,
+    ]);
+
+    useEffect(() => {
+        if (
+            !user ||
+            !roomDrawVisible ||
+            roomDrawRequiresPriority ||
+            resolvedBuildingId === null
+        ) {
+            return;
+        }
+
+        const eventSource = new EventSource(
+            `${backendUrl}/api/campus/housing/${resolvedBuildingId}/room-preferences/events`,
+            { withCredentials: true }
+        );
+
+        const handlePreferenceEvent = () => {
+            void onRefreshRoomPreferences();
+        };
+
+        eventSource.addEventListener(
+            'room-preferences-changed',
+            handlePreferenceEvent
+        );
+
+        return () => {
+            eventSource.removeEventListener(
+                'room-preferences-changed',
+                handlePreferenceEvent
+            );
+            eventSource.close();
+        };
+    }, [
+        onRefreshRoomPreferences,
+        resolvedBuildingId,
+        roomDrawRequiresPriority,
+        roomDrawVisible,
+        user,
+    ]);
+
+    const sortedRooms = useMemo(() => {
+        if (!roomDrawVisible) {
+            return rooms;
+        }
+
+        return [...rooms].sort((a, b) => {
+            if (!user?.isAdmin) {
+                const aIsUserTakenRoom = Boolean(a.roomDrawStatus?.isOwner);
+                const bIsUserTakenRoom = Boolean(b.roomDrawStatus?.isOwner);
+
+                if (aIsUserTakenRoom !== bIsUserTakenRoom) {
+                    return aIsUserTakenRoom ? -1 : 1;
+                }
+            }
+
+            const aTaken = a.roomDrawStatus?.status === 'taken';
+            const bTaken = b.roomDrawStatus?.status === 'taken';
+
+            if (aTaken === bTaken) {
+                return a.room_number.localeCompare(b.room_number, undefined, {
+                    numeric: true,
+                });
+            }
+
+            return aTaken ? 1 : -1;
+        });
+    }, [rooms, roomDrawVisible, user?.isAdmin]);
+
+    const currentUserTakenRoom = useMemo(
+        () =>
+            user?.isAdmin
+                ? null
+                : allRooms.find((room) => room.roomDrawStatus?.isOwner) || null,
+        [allRooms, user?.isAdmin]
+    );
+    const currentUserTakenRoomMessage = currentUserTakenRoom
+        ? `You already marked room ${currentUserTakenRoom.room_number} taken. Mark it not taken before choosing another room.`
+        : undefined;
+
+    return (
+        <>
+            {sortedRooms.map((room) => (
+                <RoomCard
+                    key={room.id}
+                    buildingName={buildingName}
+                    room={room}
+                    canReportRoomDraw={
+                        roomDrawVisible && !roomDrawRequiresPriority
+                    }
+                    canOverrideRoomDraw={!!user?.isAdmin}
+                    canMarkRoomTaken={
+                        !currentUserTakenRoom ||
+                        currentUserTakenRoom.id === room.id
+                    }
+                    roomTakenDisabledMessage={currentUserTakenRoomMessage}
+                    canManagePreferences={
+                        !!user && roomDrawVisible && !roomDrawRequiresPriority
+                    }
+                    isInPreferenceRanking={preferenceRoomIds.has(room.id)}
+                    nextPreferenceRank={nextPreferenceRank}
+                    onAddPreference={onAddPreference}
+                    onRemovePreference={onRemovePreference}
+                    onRoomDrawStatusChange={onRoomDrawStatusChange}
+                />
+            ))}
+        </>
     );
 }

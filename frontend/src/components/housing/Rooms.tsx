@@ -1,5 +1,6 @@
 'use client';
 import { RoomCardProps } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
 import { getUserSafeMessage } from '@/utils/apiErrors';
 import { getBuildingSlug } from '@/utils/housingText';
 import Link from 'next/link';
@@ -61,7 +62,6 @@ const roomCardPropsEqual = (
     if (
         previous.buildingName !== next.buildingName ||
         previous.room !== next.room ||
-        previous.canViewReviews !== next.canViewReviews ||
         previous.canReportRoomDraw !== next.canReportRoomDraw ||
         previous.canOverrideRoomDraw !== next.canOverrideRoomDraw ||
         previous.canMarkRoomTaken !== next.canMarkRoomTaken ||
@@ -89,7 +89,6 @@ const roomCardPropsEqual = (
 export const RoomCard = memo(function RoomCard({
     buildingName,
     room,
-    canViewReviews = true,
     canReportRoomDraw = false,
     canOverrideRoomDraw = false,
     canMarkRoomTaken = true,
@@ -101,7 +100,6 @@ export const RoomCard = memo(function RoomCard({
     onRemovePreference,
     onRoomDrawStatusChange,
 }: RoomCardProps) {
-    const router = useRouter();
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [updatingPreference, setUpdatingPreference] = useState(false);
     const [preferenceMessage, setPreferenceMessage] = useState<string | null>(
@@ -156,9 +154,6 @@ export const RoomCard = memo(function RoomCard({
         ? 'border-red-200 bg-red-100 text-red-800'
         : 'border-sas-green/30 bg-sas-green text-sas-white';
     const reviewHref = `/campus/housing/${getBuildingSlug(buildingName)}/${encodeURIComponent(room.room_number)}`;
-    const prefetchReviewPage = () => {
-        router.prefetch(reviewHref);
-    };
 
     const changeRoomDrawStatus = async (nextStatus: 'taken' | 'not_taken') => {
         if (!onRoomDrawStatusChange) {
@@ -231,27 +226,7 @@ export const RoomCard = memo(function RoomCard({
                 <p className="text-sm text-sas-black/55">{buildingName}</p>
             </div>
 
-            {canViewReviews ? (
-                <div className="mb-4 flex items-center">
-                    <span className="mr-2 text-sas-black/65">Rating:</span>
-                    {room.reviewCount && room.reviewCount > 0 ? (
-                        <div className="flex items-center">
-                            <StarRating rating={room.averageRating || 0} />
-                            <span className="ml-2 text-sas-black/55">
-                                ({room.reviewCount})
-                            </span>
-                        </div>
-                    ) : (
-                        <span className="text-sas-black/55">
-                            No ratings yet
-                        </span>
-                    )}
-                </div>
-            ) : (
-                <p className="mb-4 text-sm text-sas-black/55">
-                    Sign in to view reviews and ratings.
-                </p>
-            )}
+            <RoomRatingSummary room={room} />
 
             <div className="mb-6">
                 <p className="text-lg text-sas-black/75">
@@ -311,45 +286,13 @@ export const RoomCard = memo(function RoomCard({
                                 {isTaken ? 'Taken' : 'Not Taken'}
                             </p>
                         </div>
-                        {canViewReviews ? (
-                            isTaken ? (
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        changeRoomDrawStatus('not_taken')
-                                    }
-                                    disabled={
-                                        updatingStatus || !canChangeTakenStatus
-                                    }
-                                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:cursor-not-allowed disabled:border-sas-line disabled:text-sas-black/35 disabled:hover:bg-transparent"
-                                >
-                                    {updatingStatus
-                                        ? 'Updating...'
-                                        : canChangeTakenStatus
-                                          ? 'Mark Not Taken'
-                                          : 'Taken'}
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        changeRoomDrawStatus('taken')
-                                    }
-                                    disabled={
-                                        updatingStatus || !canMarkRoomTaken
-                                    }
-                                    className="rounded-md bg-sas-green px-3 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
-                                >
-                                    {updatingStatus
-                                        ? 'Updating...'
-                                        : 'Mark Taken'}
-                                </button>
-                            )
-                        ) : (
-                            <span className="text-xs text-sas-black/50">
-                                Sign in to report
-                            </span>
-                        )}
+                        <RoomDrawStatusAction
+                            isTaken={isTaken}
+                            updatingStatus={updatingStatus}
+                            canChangeTakenStatus={canChangeTakenStatus}
+                            canMarkRoomTaken={canMarkRoomTaken}
+                            onChangeRoomDrawStatus={changeRoomDrawStatus}
+                        />
                     </div>
                     {canOverrideRoomDraw && isTaken && (
                         <div className="mt-3 border-t border-sas-line pt-3 text-xs text-sas-black/60">
@@ -363,7 +306,6 @@ export const RoomCard = memo(function RoomCard({
                         </div>
                     )}
                     {!isTaken &&
-                        canViewReviews &&
                         !canMarkRoomTaken &&
                         roomTakenDisabledMessage && (
                             <p className="mt-3 border-t border-sas-line pt-3 text-xs text-sas-black/60">
@@ -379,16 +321,7 @@ export const RoomCard = memo(function RoomCard({
                 </p>
             )}
 
-            <Link
-                href={reviewHref}
-                prefetch={false}
-                onMouseEnter={prefetchReviewPage}
-                onFocus={prefetchReviewPage}
-            >
-                <button className="rounded-md border border-sas-green px-6 py-2 font-medium text-sas-green transition-colors hover:bg-sas-green hover:text-sas-white">
-                    {canViewReviews ? 'View Reviews' : 'Sign in to View Reviews'}
-                </button>
-            </Link>
+            <RoomReviewButton reviewHref={reviewHref} />
             {canManagePreferences && (
                 <div className="mt-3">
                     {preferenceHolders.length > 0 && (
@@ -454,3 +387,113 @@ export const RoomCard = memo(function RoomCard({
         </div>
     );
 }, roomCardPropsEqual);
+
+const RoomRatingSummary = memo(function RoomRatingSummary({
+    room,
+}: {
+    room: RoomCardProps['room'];
+}) {
+    const { user } = useAuth();
+
+    if (!user) {
+        return (
+            <p className="mb-4 text-sm text-sas-black/55">
+                Sign in to view reviews and ratings.
+            </p>
+        );
+    }
+
+    return (
+        <div className="mb-4 flex items-center">
+            <span className="mr-2 text-sas-black/65">Rating:</span>
+            {room.reviewCount && room.reviewCount > 0 ? (
+                <div className="flex items-center">
+                    <StarRating rating={room.averageRating || 0} />
+                    <span className="ml-2 text-sas-black/55">
+                        ({room.reviewCount})
+                    </span>
+                </div>
+            ) : (
+                <span className="text-sas-black/55">No ratings yet</span>
+            )}
+        </div>
+    );
+});
+
+const RoomReviewButton = memo(function RoomReviewButton({
+    reviewHref,
+}: {
+    reviewHref: string;
+}) {
+    const router = useRouter();
+    const { user } = useAuth();
+
+    const prefetchReviewPage = () => {
+        router.prefetch(reviewHref);
+    };
+
+    return (
+        <Link
+            href={reviewHref}
+            prefetch={false}
+            onMouseEnter={prefetchReviewPage}
+            onFocus={prefetchReviewPage}
+        >
+            <button className="rounded-md border border-sas-green px-6 py-2 font-medium text-sas-green transition-colors hover:bg-sas-green hover:text-sas-white">
+                {user ? 'View Reviews' : 'Sign in to View Reviews'}
+            </button>
+        </Link>
+    );
+});
+
+const RoomDrawStatusAction = memo(function RoomDrawStatusAction({
+    isTaken,
+    updatingStatus,
+    canChangeTakenStatus,
+    canMarkRoomTaken,
+    onChangeRoomDrawStatus,
+}: {
+    isTaken: boolean;
+    updatingStatus: boolean;
+    canChangeTakenStatus: boolean;
+    canMarkRoomTaken: boolean;
+    onChangeRoomDrawStatus: (nextStatus: 'taken' | 'not_taken') => void;
+}) {
+    const { user } = useAuth();
+
+    if (!user) {
+        return (
+            <span className="text-xs text-sas-black/50">
+                Sign in to report
+            </span>
+        );
+    }
+
+    if (isTaken) {
+        return (
+            <button
+                type="button"
+                onClick={() => onChangeRoomDrawStatus('not_taken')}
+                disabled={updatingStatus || !canChangeTakenStatus}
+                className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:cursor-not-allowed disabled:border-sas-line disabled:text-sas-black/35 disabled:hover:bg-transparent"
+            >
+                {updatingStatus
+                    ? 'Updating...'
+                    : canChangeTakenStatus
+                      ? 'Mark Not Taken'
+                      : 'Taken'}
+            </button>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={() => onChangeRoomDrawStatus('taken')}
+            disabled={updatingStatus || !canMarkRoomTaken}
+            className="rounded-md bg-sas-green px-3 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+        >
+            {updatingStatus ? 'Updating...' : 'Mark Taken'}
+        </button>
+    );
+});
