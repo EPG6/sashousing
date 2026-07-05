@@ -1,9 +1,9 @@
 'use client';
 
-import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
 import AppModal from '@/components/AppModal';
+import Skeleton, { ReviewSkeleton } from '@/components/Skeleton';
 import { PictureModal, ReviewForm } from '@/components/housing/Reviews';
 import { StarRating, getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
@@ -151,7 +151,24 @@ const RoomPage = () => {
           : 'Add Review';
 
     if (loading || authLoading) {
-        return <Loading />;
+        return (
+            <div className="min-h-screen bg-sas-mist text-sas-black">
+                <SiteHeader />
+                <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+                    <Skeleton className="mb-6 h-10 w-24" />
+                    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <Skeleton className="h-9 w-80" />
+                        <Skeleton className="h-10 w-32" />
+                    </div>
+                    <ReviewSkeleton />
+                    <div className="mt-6 grid gap-4">
+                        {Array.from({ length: 3 }).map((_, index) => (
+                            <ReviewSkeleton key={index} />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (!user) {

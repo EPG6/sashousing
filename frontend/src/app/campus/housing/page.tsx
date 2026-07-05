@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
-import Loading from '@/components/Loading';
+import { BuildingCardSkeleton } from '@/components/Skeleton';
 import { backendUrl } from '@/utils/api';
 import SiteHeader from '@/components/SiteHeader';
 import { useAuth } from '@/hooks/useAuth';
@@ -172,7 +172,30 @@ const HousingPage = () => {
     };
 
     if (loading || authLoading) {
-        return <Loading />;
+        return (
+            <div className="min-h-screen bg-sas-mist text-sas-black">
+                <SiteHeader />
+                <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+                    <div className="mb-10 border-b border-sas-line pb-5">
+                        <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">
+                            SAS Housing Reviews
+                        </h1>
+                        <p className="mt-2 max-w-2xl text-sas-black/70">
+                            Browse residence halls and room reviews from the
+                            student community.
+                        </p>
+                    </div>
+                    <div className="mb-8 max-w-xl">
+                        <div className="h-12 rounded-md border border-sas-line bg-sas-white" />
+                    </div>
+                    <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+                        {Array.from({ length: 6 }).map((_, index) => (
+                            <BuildingCardSkeleton key={index} />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (error) {

@@ -1,6 +1,6 @@
 'use client';
 
-import Loading from '@/components/Loading';
+import Skeleton, { RoomCardSkeleton } from '@/components/Skeleton';
 import SiteHeader from '@/components/SiteHeader';
 import { RoomCard, getRoomOccupancyType } from '@/components/housing/Rooms';
 import { useAuth } from '@/hooks/useAuth';
@@ -863,7 +863,27 @@ export default function DynamicRooms() {
         : [];
 
     if (loading) {
-        return <Loading />;
+        return (
+            <div className="min-h-screen bg-sas-mist text-sas-black">
+                <SiteHeader />
+                <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+                    <Skeleton className="mb-6 h-10 w-24" />
+                    <Skeleton className="mb-4 h-10 w-64" />
+                    <Skeleton className="mb-6 h-[320px] w-full" />
+                    <Skeleton className="mb-8 h-6 w-3/4" />
+                    <div className="mb-8">
+                        <Skeleton className="h-8 w-48" />
+                        <Skeleton className="mt-3 h-5 w-40" />
+                    </div>
+                    <Skeleton className="mb-6 h-12 max-w-xl" />
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {Array.from({ length: 9 }).map((_, index) => (
+                            <RoomCardSkeleton key={index} />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (buildingNotFound || !building) {

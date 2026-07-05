@@ -1,10 +1,10 @@
 'use client';
 
-import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
 import AppModal from '@/components/AppModal';
 import AdminTabs from '@/components/admin/AdminTabs';
+import Skeleton, { AdminRoomTableSkeleton } from '@/components/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { Building, Room } from '@/types';
 import { backendUrl } from '@/utils/api';
@@ -939,7 +939,32 @@ export default function HousingDataAdminPage() {
     }, []);
 
     if (authLoading || loading) {
-        return <Loading />;
+        return (
+            <div className="min-h-screen bg-sas-mist text-sas-black">
+                <SiteHeader />
+                <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+                    <Skeleton className="mb-6 h-10 w-32" />
+                    <div className="mb-8 border-b border-sas-line pb-5">
+                        <Skeleton className="h-10 w-56" />
+                        <Skeleton className="mt-3 h-5 w-72" />
+                    </div>
+                    <div className="mb-6">
+                        <Skeleton className="h-5 w-24" />
+                        <Skeleton className="mt-3 h-12 max-w-xl" />
+                        <div className="mt-4 flex gap-3 overflow-hidden pb-3">
+                            {Array.from({ length: 3 }).map((_, index) => (
+                                <Skeleton
+                                    key={index}
+                                    className="h-36 w-72 shrink-0"
+                                />
+                            ))}
+                        </div>
+                    </div>
+                    <Skeleton className="h-80 w-full" />
+                    <AdminRoomTableSkeleton />
+                </main>
+            </div>
+        );
     }
 
     if (!user) {
@@ -1235,9 +1260,7 @@ export default function HousingDataAdminPage() {
                                 Rooms
                             </h2>
                             {roomsLoading ? (
-                                <p className="mt-4 text-sas-black/65">
-                                    Loading rooms...
-                                </p>
+                                <AdminRoomTableSkeleton />
                             ) : rooms.length === 0 ? (
                                 <p className="mt-4 text-sas-black/65">
                                     No rooms found for this building.
