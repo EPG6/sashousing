@@ -3,11 +3,13 @@
 import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
+import AppModal from '@/components/AppModal';
 import AdminTabs from '@/components/admin/AdminTabs';
 import { useAuth } from '@/hooks/useAuth';
 import { RoomDrawSettings } from '@/types';
 import { backendUrl } from '@/utils/api';
-import Link from 'next/link';
+import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const toDateTimeLocalValue = (value: string | null) => {
@@ -28,11 +30,17 @@ const toDateTimeLocalValue = (value: string | null) => {
 const toIsoValue = (value: string) =>
     value ? new Date(value).toISOString() : null;
 
+type ConfirmAction = 'clear' | 'close' | 'end';
+
 export default function RoomDrawAdminPage() {
+    const router = useRouter();
     const { user, loading: authLoading } = useAuth();
     const [settings, setSettings] = useState<RoomDrawSettings | null>(null);
     const [startsAt, setStartsAt] = useState('');
     const [endsAt, setEndsAt] = useState('');
+    const [savedStartsAt, setSavedStartsAt] = useState('');
+    const [savedEndsAt, setSavedEndsAt] = useState('');
+    const [editingWindow, setEditingWindow] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [clearing, setClearing] = useState(false);
@@ -40,8 +48,15 @@ export default function RoomDrawAdminPage() {
     const [closing, setClosing] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
+        null
+    );
+    const [pendingHref, setPendingHref] = useState<string | null>(null);
 
     const controlsDisabled = saving || clearing || ending || closing;
+    const windowHasChanges =
+        startsAt !== savedStartsAt || endsAt !== savedEndsAt;
+    const hasUnsavedEdits = editingWindow && windowHasChanges;
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -59,8 +74,12 @@ export default function RoomDrawAdminPage() {
 
                 const data = (await response.json()) as RoomDrawSettings;
                 setSettings(data);
-                setStartsAt(toDateTimeLocalValue(data.startsAt));
-                setEndsAt(toDateTimeLocalValue(data.endsAt));
+                const nextStartsAt = toDateTimeLocalValue(data.startsAt);
+                const nextEndsAt = toDateTimeLocalValue(data.endsAt);
+                setStartsAt(nextStartsAt);
+                setEndsAt(nextEndsAt);
+                setSavedStartsAt(nextStartsAt);
+                setSavedEndsAt(nextEndsAt);
             } catch (error) {
                 console.error('Room draw settings error:', error);
                 setError('Could not load room draw settings.');
@@ -71,6 +90,49 @@ export default function RoomDrawAdminPage() {
 
         fetchSettings();
     }, []);
+
+    useEffect(() => {
+        if (!hasUnsavedEdits) {
+            return;
+        }
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [hasUnsavedEdits]);
+
+    const navigateWithUnsavedCheck = (href: string) => {
+        if (hasUnsavedEdits) {
+            setPendingHref(href);
+            return;
+        }
+
+        router.push(href);
+    };
+
+    const discardAndNavigate = () => {
+        setStartsAt(savedStartsAt);
+        setEndsAt(savedEndsAt);
+        setEditingWindow(false);
+        if (pendingHref) {
+            router.push(pendingHref);
+            setPendingHref(null);
+        }
+    };
+
+    const cancelWindowEdit = () => {
+        setStartsAt(savedStartsAt);
+        setEndsAt(savedEndsAt);
+        setEditingWindow(false);
+        setMessage(null);
+        setError(null);
+    };
 
     const saveSettings = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -94,21 +156,29 @@ export default function RoomDrawAdminPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to save settings');
+                throw new Error(
+                    await getApiErrorMessage(response, 'Failed to save settings')
+                );
             }
 
+            const data = await response.json();
             setSettings(data);
-            setStartsAt(toDateTimeLocalValue(data.startsAt));
-            setEndsAt(toDateTimeLocalValue(data.endsAt));
+            const nextStartsAt = toDateTimeLocalValue(data.startsAt);
+            const nextEndsAt = toDateTimeLocalValue(data.endsAt);
+            setStartsAt(nextStartsAt);
+            setEndsAt(nextEndsAt);
+            setSavedStartsAt(nextStartsAt);
+            setSavedEndsAt(nextEndsAt);
+            setEditingWindow(false);
             setMessage('Room draw window saved.');
         } catch (error) {
             console.error('Room draw save error:', error);
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not save room draw settings.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not save room draw settings.'
+                )
             );
         } finally {
             setSaving(false);
@@ -116,14 +186,6 @@ export default function RoomDrawAdminPage() {
     };
 
     const clearStatuses = async () => {
-        if (
-            !window.confirm(
-                'Clear every room draw status? This will make all rooms Not Taken.'
-            )
-        ) {
-            return;
-        }
-
         setClearing(true);
         setMessage(null);
         setError(null);
@@ -137,11 +199,16 @@ export default function RoomDrawAdminPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to clear statuses');
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to clear statuses'
+                    )
+                );
             }
 
+            const data = await response.json();
             setMessage(
                 `Room draw statuses cleared. ${data.deletedCount || 0} status${
                     data.deletedCount === 1 ? '' : 'es'
@@ -150,9 +217,10 @@ export default function RoomDrawAdminPage() {
         } catch (error) {
             console.error('Room draw clear error:', error);
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not clear room draw statuses.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not clear room draw statuses.'
+                )
             );
         } finally {
             setClearing(false);
@@ -160,14 +228,6 @@ export default function RoomDrawAdminPage() {
     };
 
     const closeRoomDraw = async () => {
-        if (
-            !window.confirm(
-                'Close room draw now and clear every room status? This cannot be undone.'
-            )
-        ) {
-            return;
-        }
-
         setClosing(true);
         setMessage(null);
         setError(null);
@@ -181,14 +241,24 @@ export default function RoomDrawAdminPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to close room draw');
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to close room draw'
+                    )
+                );
             }
 
+            const data = await response.json();
             setSettings(data);
-            setStartsAt(toDateTimeLocalValue(data.startsAt));
-            setEndsAt(toDateTimeLocalValue(data.endsAt));
+            const nextStartsAt = toDateTimeLocalValue(data.startsAt);
+            const nextEndsAt = toDateTimeLocalValue(data.endsAt);
+            setStartsAt(nextStartsAt);
+            setEndsAt(nextEndsAt);
+            setSavedStartsAt(nextStartsAt);
+            setSavedEndsAt(nextEndsAt);
+            setEditingWindow(false);
             setMessage(
                 `Room draw closed. ${data.deletedCount || 0} status${
                     data.deletedCount === 1 ? '' : 'es'
@@ -197,9 +267,10 @@ export default function RoomDrawAdminPage() {
         } catch (error) {
             console.error('Room draw close error:', error);
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not close room draw.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not close room draw.'
+                )
             );
         } finally {
             setClosing(false);
@@ -207,14 +278,6 @@ export default function RoomDrawAdminPage() {
     };
 
     const endRoomDraw = async () => {
-        if (
-            !window.confirm(
-                'End the room draw period now? Existing room statuses will be kept.'
-            )
-        ) {
-            return;
-        }
-
         setEnding(true);
         setMessage(null);
         setError(null);
@@ -228,25 +291,64 @@ export default function RoomDrawAdminPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to end room draw');
+                throw new Error(
+                    await getApiErrorMessage(response, 'Failed to end room draw')
+                );
             }
 
+            const data = await response.json();
             setSettings(data);
-            setStartsAt(toDateTimeLocalValue(data.startsAt));
-            setEndsAt(toDateTimeLocalValue(data.endsAt));
+            const nextStartsAt = toDateTimeLocalValue(data.startsAt);
+            const nextEndsAt = toDateTimeLocalValue(data.endsAt);
+            setStartsAt(nextStartsAt);
+            setEndsAt(nextEndsAt);
+            setSavedStartsAt(nextStartsAt);
+            setSavedEndsAt(nextEndsAt);
+            setEditingWindow(false);
             setMessage('Room draw period ended. Existing statuses were kept.');
         } catch (error) {
             console.error('Room draw end error:', error);
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not end room draw.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not end room draw.'
+                )
             );
         } finally {
             setEnding(false);
         }
+    };
+
+    const confirmActionContent = {
+        clear: {
+            title: 'Clear All Statuses?',
+            body: 'This will make every room Not Taken.',
+            action: clearStatuses,
+            label: 'Clear Statuses',
+        },
+        close: {
+            title: 'Close Room Draw?',
+            body: 'This will close room draw now and clear every room status.',
+            action: closeRoomDraw,
+            label: 'Close and Clear',
+        },
+        end: {
+            title: 'End Room Draw Period?',
+            body: 'This will end the room draw period now. Existing room statuses will be kept.',
+            action: endRoomDraw,
+            label: 'End Period',
+        },
+    };
+
+    const runConfirmedAction = async () => {
+        if (!confirmAction) {
+            return;
+        }
+
+        const action = confirmActionContent[confirmAction].action;
+        setConfirmAction(null);
+        await action();
     };
 
     if (authLoading || loading) {
@@ -277,16 +379,76 @@ export default function RoomDrawAdminPage() {
 
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
-            <SiteHeader />
+            <SiteHeader onNavigate={navigateWithUnsavedCheck} />
+            <AppModal
+                isOpen={confirmAction !== null}
+                title={
+                    confirmAction
+                        ? confirmActionContent[confirmAction].title
+                        : ''
+                }
+                onClose={() => setConfirmAction(null)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setConfirmAction(null)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={runConfirmedAction}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            {confirmAction
+                                ? confirmActionContent[confirmAction].label
+                                : 'Continue'}
+                        </button>
+                    </>
+                }
+            >
+                {confirmAction ? confirmActionContent[confirmAction].body : ''}
+            </AppModal>
+            <AppModal
+                isOpen={pendingHref !== null}
+                title="Discard Unsaved Edits?"
+                onClose={() => setPendingHref(null)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingHref(null)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Keep Editing
+                        </button>
+                        <button
+                            type="button"
+                            onClick={discardAndNavigate}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            Discard Edits
+                        </button>
+                    </>
+                }
+            >
+                Leaving this page will discard the edits currently on this page.
+            </AppModal>
             <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-                <Link
-                    href="/campus/housing"
+                <button
+                    type="button"
+                    onClick={() => navigateWithUnsavedCheck('/campus/housing')}
                     className="mb-6 inline-flex items-center rounded-md border border-sas-line bg-sas-white px-4 py-2 text-sm font-medium text-sas-black shadow-sm hover:border-sas-green hover:text-sas-green"
                 >
                     Back to Housing
-                </Link>
+                </button>
 
-                <AdminTabs activeTab="room-draw" />
+                <AdminTabs
+                    activeTab="room-draw"
+                    onNavigate={navigateWithUnsavedCheck}
+                />
 
                 <div className="mb-8 border-b border-sas-line pb-5">
                     <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">
@@ -309,10 +471,11 @@ export default function RoomDrawAdminPage() {
                             <input
                                 type="datetime-local"
                                 value={startsAt}
+                                disabled={!editingWindow || controlsDisabled}
                                 onChange={(event) =>
                                     setStartsAt(event.target.value)
                                 }
-                                className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
                             />
                         </label>
                         <label className="block">
@@ -322,10 +485,11 @@ export default function RoomDrawAdminPage() {
                             <input
                                 type="datetime-local"
                                 value={endsAt}
+                                disabled={!editingWindow || controlsDisabled}
                                 onChange={(event) =>
                                     setEndsAt(event.target.value)
                                 }
-                                className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
                             />
                         </label>
                     </div>
@@ -356,13 +520,40 @@ export default function RoomDrawAdminPage() {
                         <p className="mt-4 text-sm text-red-700">{error}</p>
                     )}
 
-                    <button
-                        type="submit"
-                        disabled={controlsDisabled}
-                        className="mt-6 w-full rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60 sm:w-auto"
-                    >
-                        {saving ? 'Saving...' : 'Save Window'}
-                    </button>
+                    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                        {editingWindow ? (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={cancelWindowEdit}
+                                    disabled={controlsDisabled}
+                                    className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={controlsDisabled || !windowHasChanges}
+                                    className="w-full rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60 sm:w-auto"
+                                >
+                                    {saving
+                                        ? 'Saving...'
+                                        : windowHasChanges
+                                          ? 'Save Changes'
+                                          : 'Save Window'}
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setEditingWindow(true)}
+                                disabled={controlsDisabled}
+                                className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
+                            >
+                                Edit Window
+                            </button>
+                        )}
+                    </div>
                 </form>
 
                 <div className="mt-6 rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6">
@@ -376,7 +567,7 @@ export default function RoomDrawAdminPage() {
                     <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                         <button
                             type="button"
-                            onClick={clearStatuses}
+                            onClick={() => setConfirmAction('clear')}
                             disabled={controlsDisabled}
                             className="w-full rounded-md border border-sas-green px-4 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
                         >
@@ -384,7 +575,7 @@ export default function RoomDrawAdminPage() {
                         </button>
                         <button
                             type="button"
-                            onClick={endRoomDraw}
+                            onClick={() => setConfirmAction('end')}
                             disabled={controlsDisabled}
                             className="w-full rounded-md border border-sas-line px-4 py-2 font-medium text-sas-black hover:border-sas-green hover:text-sas-green disabled:opacity-60 sm:w-auto"
                         >
@@ -392,7 +583,7 @@ export default function RoomDrawAdminPage() {
                         </button>
                         <button
                             type="button"
-                            onClick={closeRoomDraw}
+                            onClick={() => setConfirmAction('close')}
                             disabled={controlsDisabled}
                             className="w-full rounded-md bg-sas-black px-4 py-2 font-medium text-sas-white hover:bg-sas-green disabled:opacity-60 sm:w-auto"
                         >

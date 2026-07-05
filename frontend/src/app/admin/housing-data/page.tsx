@@ -3,11 +3,13 @@
 import Loading from '@/components/Loading';
 import LoginRequired from '@/components/LoginRequired';
 import SiteHeader from '@/components/SiteHeader';
+import AppModal from '@/components/AppModal';
 import AdminTabs from '@/components/admin/AdminTabs';
 import { useAuth } from '@/hooks/useAuth';
 import { Building, Room } from '@/types';
 import { backendUrl } from '@/utils/api';
-import Link from 'next/link';
+import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 type BuildingSearchDoc = Building & {
@@ -21,6 +23,15 @@ type RoomForm = {
     occupancy_type: string;
     closet_type: string;
     bathroom_type: string;
+    floor: string;
+    eligibleYear: string;
+    sink: string;
+    closet: string;
+    closetType: string;
+    balcony: string;
+    privateBath: string;
+    suiteBath: string;
+    note: string;
 };
 
 const toRoomForm = (room: Room): RoomForm => ({
@@ -30,6 +41,16 @@ const toRoomForm = (room: Room): RoomForm => ({
     occupancy_type: room.occupancy_type ? String(room.occupancy_type) : '',
     closet_type: room.closet_type ? String(room.closet_type) : '',
     bathroom_type: room.bathroom_type ? String(room.bathroom_type) : '',
+    floor: room.floor ? String(room.floor) : '',
+    eligibleYear: room.eligibleYear ? String(room.eligibleYear) : '',
+    sink: room.sink === undefined ? '' : String(room.sink),
+    closet: room.closet === undefined ? '' : String(room.closet),
+    closetType: room.closetType || '',
+    balcony: room.balcony === undefined ? '' : String(room.balcony),
+    privateBath:
+        room.privateBath === undefined ? '' : String(room.privateBath),
+    suiteBath: room.suiteBath === undefined ? '' : String(room.suiteBath),
+    note: room.note || '',
 });
 
 const ROOM_FIELDS = [
@@ -51,9 +72,63 @@ const ROOM_FIELDS = [
         label: 'Bathroom',
         type: 'number' as const,
     },
+    { key: 'floor' as const, label: 'Floor', type: 'number' as const },
+    {
+        key: 'eligibleYear' as const,
+        label: 'Year',
+        type: 'number' as const,
+    },
+    { key: 'sink' as const, label: 'Sink', type: 'text' as const },
+    { key: 'closet' as const, label: 'Closet?', type: 'text' as const },
+    {
+        key: 'closetType' as const,
+        label: 'Closet Type',
+        type: 'text' as const,
+    },
+    { key: 'balcony' as const, label: 'Balcony', type: 'text' as const },
+    {
+        key: 'privateBath' as const,
+        label: 'Private Bath',
+        type: 'text' as const,
+    },
+    {
+        key: 'suiteBath' as const,
+        label: 'Suite Bath',
+        type: 'text' as const,
+    },
+    { key: 'note' as const, label: 'Note', type: 'text' as const },
 ] as const;
 
+const BOOLEAN_ROOM_FIELD_KEYS = new Set<keyof RoomForm>([
+    'sink',
+    'closet',
+    'balcony',
+    'privateBath',
+    'suiteBath',
+]);
+
+const getRoomFieldValue = (
+    roomForm: RoomForm,
+    fieldKey: keyof RoomForm,
+    isEditingRoom: boolean
+) => {
+    const value = roomForm[fieldKey];
+    if (isEditingRoom || !BOOLEAN_ROOM_FIELD_KEYS.has(fieldKey)) {
+        return value;
+    }
+
+    if (value === 'true') {
+        return 'Yes';
+    }
+    if (value === 'false') {
+        return 'No';
+    }
+
+    return value;
+};
+
 export default function HousingDataAdminPage() {
+    const router = useRouter();
     const { user, loading: authLoading } = useAuth();
     const [buildings, setBuildings] = useState<BuildingSearchDoc[]>([]);
     const [buildingSearchQuery, setBuildingSearchQuery] = useState('');
@@ -64,6 +139,7 @@ export default function HousingDataAdminPage() {
         name: '',
         campus: '',
         floors: '',
+        eligibleYear: '',
         description: '',
     });
     const [rooms, setRooms] = useState<Room[]>([]);
@@ -76,6 +152,10 @@ export default function HousingDataAdminPage() {
     const [savingRoomId, setSavingRoomId] = useState<number | null>(null);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [pendingBuildingId, setPendingBuildingId] = useState<number | null>(
+        null
+    );
+    const [pendingHref, setPendingHref] = useState<string | null>(null);
 
     const selectedBuilding = useMemo(
         () =>
@@ -117,23 +197,64 @@ export default function HousingDataAdminPage() {
 
     const hasUnsavedEdits = editingBuilding || editingRoomId !== null;
 
+    useEffect(() => {
+        if (!hasUnsavedEdits) {
+            return;
+        }
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [hasUnsavedEdits]);
+
+    const navigateWithUnsavedCheck = (href: string) => {
+        if (hasUnsavedEdits) {
+            setPendingHref(href);
+            return;
+        }
+
+        router.push(href);
+    };
+
+    const discardAndNavigate = () => {
+        setEditingBuilding(false);
+        setEditingRoomId(null);
+        if (pendingHref) {
+            router.push(pendingHref);
+            setPendingHref(null);
+        }
+    };
+
     const selectBuilding = (buildingId: number) => {
         if (buildingId === selectedBuildingId) {
             return;
         }
 
-        if (
-            hasUnsavedEdits &&
-            !window.confirm(
-                'Switch buildings and discard unsaved edits?'
-            )
-        ) {
+        if (hasUnsavedEdits) {
+            setPendingBuildingId(buildingId);
             return;
         }
 
         setEditingBuilding(false);
         setEditingRoomId(null);
         setSelectedBuildingId(buildingId);
+    };
+
+    const confirmBuildingSwitch = () => {
+        if (pendingBuildingId === null) {
+            return;
+        }
+
+        setEditingBuilding(false);
+        setEditingRoomId(null);
+        setSelectedBuildingId(pendingBuildingId);
+        setPendingBuildingId(null);
     };
 
     useEffect(() => {
@@ -194,6 +315,9 @@ export default function HousingDataAdminPage() {
             name: selectedBuilding.name,
             campus: selectedBuilding.campus,
             floors: String(selectedBuilding.floors),
+            eligibleYear: selectedBuilding.eligibleYear
+                ? String(selectedBuilding.eligibleYear)
+                : '',
             description: selectedBuilding.description || '',
         });
         setEditingBuilding(false);
@@ -262,16 +386,22 @@ export default function HousingDataAdminPage() {
                         name: buildingForm.name,
                         campus: buildingForm.campus,
                         floors: buildingForm.floors,
+                        eligibleYear: buildingForm.eligibleYear,
                         description: buildingForm.description,
                     }),
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to save building');
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to save building'
+                    )
+                );
             }
 
+            const data = await response.json();
             setBuildings((currentBuildings) =>
                 currentBuildings.map((building) =>
                     building.id === data.id
@@ -287,9 +417,10 @@ export default function HousingDataAdminPage() {
         } catch (error) {
             console.error('Building save error:', error);
             setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Could not save building.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not save building.'
+                )
             );
         } finally {
             setSavingBuilding(false);
@@ -305,6 +436,9 @@ export default function HousingDataAdminPage() {
             name: selectedBuilding.name,
             campus: selectedBuilding.campus,
             floors: String(selectedBuilding.floors),
+            eligibleYear: selectedBuilding.eligibleYear
+                ? String(selectedBuilding.eligibleYear)
+                : '',
             description: selectedBuilding.description || '',
         });
         setEditingBuilding(false);
@@ -333,11 +467,13 @@ export default function HousingDataAdminPage() {
                 }
             );
 
-            const data = await response.json().catch(() => null);
             if (!response.ok) {
-                throw new Error(data?.message || 'Failed to save room');
+                throw new Error(
+                    await getApiErrorMessage(response, 'Failed to save room')
+                );
             }
 
+            const data = await response.json();
             setRooms((currentRooms) =>
                 currentRooms.map((room) => (room.id === data.id ? data : room))
             );
@@ -350,7 +486,10 @@ export default function HousingDataAdminPage() {
         } catch (error) {
             console.error('Room save error:', error);
             setError(
-                error instanceof Error ? error.message : 'Could not save room.'
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not save room.'
+                )
             );
         } finally {
             setSavingRoomId(null);
@@ -424,16 +563,71 @@ export default function HousingDataAdminPage() {
 
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
-            <SiteHeader />
+            <SiteHeader onNavigate={navigateWithUnsavedCheck} />
+            <AppModal
+                isOpen={pendingBuildingId !== null}
+                title="Discard Unsaved Edits?"
+                onClose={() => setPendingBuildingId(null)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingBuildingId(null)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Keep Editing
+                        </button>
+                        <button
+                            type="button"
+                            onClick={confirmBuildingSwitch}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            Discard Edits
+                        </button>
+                    </>
+                }
+            >
+                Switching buildings will discard the edits currently on this
+                page.
+            </AppModal>
+            <AppModal
+                isOpen={pendingHref !== null}
+                title="Discard Unsaved Edits?"
+                onClose={() => setPendingHref(null)}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingHref(null)}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            Keep Editing
+                        </button>
+                        <button
+                            type="button"
+                            onClick={discardAndNavigate}
+                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                        >
+                            Discard Edits
+                        </button>
+                    </>
+                }
+            >
+                Leaving this page will discard the edits currently on this page.
+            </AppModal>
             <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-                <Link
-                    href="/campus/housing"
+                <button
+                    type="button"
+                    onClick={() => navigateWithUnsavedCheck('/campus/housing')}
                     className="mb-6 inline-flex items-center rounded-md border border-sas-line bg-sas-white px-4 py-2 text-sm font-medium text-sas-black shadow-sm hover:border-sas-green hover:text-sas-green"
                 >
                     Back to Housing
-                </Link>
+                </button>
 
-                <AdminTabs activeTab="housing-data" />
+                <AdminTabs
+                    activeTab="housing-data"
+                    onNavigate={navigateWithUnsavedCheck}
+                />
 
                 <div className="mb-8 border-b border-sas-line pb-5">
                     <h1 className="font-display text-2xl font-semibold text-sas-black sm:text-4xl">
@@ -469,7 +663,7 @@ export default function HousingDataAdminPage() {
                             {buildings.length} buildings
                         </p>
                     )}
-                    <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="mt-2 flex gap-3 overflow-x-auto pb-3">
                         {filteredBuildings.map((building) => {
                             const isSelected =
                                 building.id === selectedBuildingId;
@@ -492,7 +686,7 @@ export default function HousingDataAdminPage() {
                                     key={building.id}
                                     type="button"
                                     onClick={() => selectBuilding(building.id)}
-                                    className={`w-full rounded-md border p-4 text-left shadow-sm transition-colors ${
+                                    className={`min-h-36 w-72 shrink-0 rounded-md border p-4 text-left shadow-sm transition-colors ${
                                         isSelected
                                             ? 'border-sas-green bg-sas-green text-sas-white'
                                             : 'border-sas-line bg-sas-white text-sas-black hover:border-sas-green'
@@ -614,6 +808,27 @@ export default function HousingDataAdminPage() {
                                         className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
                                     />
                                 </label>
+                                <label className="block">
+                                    <span className="text-sm font-medium text-sas-black/75">
+                                        Eligible Year
+                                    </span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="4"
+                                        value={buildingForm.eligibleYear}
+                                        disabled={!editingBuilding}
+                                        onChange={(event) =>
+                                            setBuildingForm((current) => ({
+                                                ...current,
+                                                eligibleYear:
+                                                    event.target.value,
+                                            }))
+                                        }
+                                        placeholder="All years"
+                                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                                    />
+                                </label>
                                 <label className="block sm:col-span-2">
                                     <span className="text-sm font-medium text-sas-black/75">
                                         Description
@@ -716,10 +931,11 @@ export default function HousingDataAdminPage() {
                                                                             field.type
                                                                         }
                                                                         value={
-                                                                            roomForm[
-                                                                                field
-                                                                                    .key
-                                                                            ]
+                                                                            getRoomFieldValue(
+                                                                                roomForm,
+                                                                                field.key,
+                                                                                isEditingRoom
+                                                                            )
                                                                         }
                                                                         disabled={
                                                                             !isEditingRoom
@@ -815,10 +1031,11 @@ export default function HousingDataAdminPage() {
                                                                                 field.type
                                                                             }
                                                                             value={
-                                                                                roomForm[
-                                                                                    field
-                                                                                        .key
-                                                                                ]
+                                                                                getRoomFieldValue(
+                                                                                    roomForm,
+                                                                                    field.key,
+                                                                                    isEditingRoom
+                                                                                )
                                                                             }
                                                                             disabled={
                                                                                 !isEditingRoom

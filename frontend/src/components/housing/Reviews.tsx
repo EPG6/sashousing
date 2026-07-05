@@ -6,6 +6,7 @@ import { ReviewFormProps } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import Image from 'next/image';
 import { backendUrl } from '@/utils/api';
+import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 
 export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
     const { user } = useAuth();
@@ -55,6 +56,9 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
     const [pictureURLs, setPictureURLs] = useState<string[] | null>(null);
 
     const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+    const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (review) {
@@ -115,10 +119,15 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
 
         if (Object.keys(errors).length > 0) {
             setFormErrors(errors);
+            setSubmitError(null);
             return;
         }
 
+        setFormErrors({});
         try {
+            setIsSubmitting(true);
+            setSubmitMessage(null);
+            setSubmitError(null);
             if (!user) {
                 throw new Error('Error getting current user');
             }
@@ -151,14 +160,26 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
             });
 
             if (!response.ok) {
-                throw new Error('Error submitting review');
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Could not submit your review.'
+                    )
+                );
             }
 
-            alert('Review submitted successfully!');
-            window.location.reload();
+            setSubmitMessage('Review submitted successfully.');
+            setTimeout(() => window.location.reload(), 800);
         } catch (error) {
-            alert('Error submitting review');
             console.error(error);
+            setSubmitError(
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not submit your review.'
+                )
+            );
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -335,10 +356,21 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
             {/* Submit Button */}
             <button
                 type="submit"
-                className="mt-4 rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black"
+                disabled={isSubmitting}
+                className="mt-4 rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
             >
-                Submit
+                {isSubmitting ? 'Submitting...' : 'Submit'}
             </button>
+            {submitError && (
+                <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                    {submitError}
+                </p>
+            )}
+            {submitMessage && (
+                <p className="mt-3 rounded-md border border-sas-green/30 bg-sas-green/10 px-3 py-2 text-sm text-sas-green">
+                    {submitMessage}
+                </p>
+            )}
         </form>
     );
 };

@@ -11,7 +11,9 @@ import {
     HousingReviews,
     HousingRooms,
     RoomDrawSettings,
+    RoomDrawParticipants,
     RoomDrawStatuses,
+    RoomPreferences,
 } from '../models/Housing';
 import { getHousingReviewPictures } from '../db';
 
@@ -52,6 +54,11 @@ const getRoomDrawSettingsPayload = async () => {
 const getSessionUserName = (user: Express.Request['session']['user']) =>
     user ? `${user.firstName} ${user.lastName}`.trim() : '';
 
+const getSessionUserId = (req: Request) => req.session.user?.id.trim();
+
+const getSessionUserEmail = (req: Request) =>
+    req.session.user?.email.toLowerCase().trim();
+
 const parseRequiredNumber = (value: unknown) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
@@ -68,6 +75,186 @@ const parseOptionalNumber = (value: unknown) => {
 
     return parseRequiredNumber(value);
 };
+
+const parseOptionalBoolean = (value: unknown) => {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (value === null || value === '') {
+        return null;
+    }
+
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    const normalizedValue = String(value).trim().toLowerCase();
+    if (['true', 'yes', '1'].includes(normalizedValue)) {
+        return true;
+    }
+    if (['false', 'no', '0'].includes(normalizedValue)) {
+        return false;
+    }
+
+    return null;
+};
+
+const parseOptionalShortText = (value: unknown, maxLength: number) => {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (value === null || value === '') {
+        return null;
+    }
+
+    return String(value).trim().slice(0, maxLength);
+};
+
+const parseReviewRating = (value: unknown) => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+        return null;
+    }
+
+    return parsed;
+};
+
+const parseReviewPayload = (body: Record<string, unknown>) => {
+    const overall = parseReviewRating(body.overall);
+    if (overall === null) {
+        return { message: 'Overall rating is required' };
+    }
+
+    const quiet = parseReviewRating(body.quiet);
+    if (quiet === null) {
+        return { message: 'Quiet rating is required' };
+    }
+
+    const layout = parseReviewRating(body.layout);
+    if (layout === null) {
+        return { message: 'Layout rating is required' };
+    }
+
+    const temperature = parseReviewRating(body.temperature);
+    if (temperature === null) {
+        return { message: 'Temperature rating is required' };
+    }
+
+    const comments = String(body.comments || '').trim();
+    if (!comments) {
+        return { message: 'Please leave a comment' };
+    }
+
+    return {
+        value: {
+            overall,
+            quiet,
+            layout,
+            temperature,
+            comments,
+        },
+    };
+};
+
+type RoomPreferenceInput = {
+    housing_room_id?: unknown;
+    notes?: unknown;
+};
+
+type NormalizedRoomPreferenceInput = {
+    housing_room_id: number;
+    rank: number;
+    notes?: string;
+};
+
+const MAX_ACTIVE_ROOM_PREFERENCES = 2;
+
+const getRoomDrawParticipant = async (req: Request) => {
+    const userId = getSessionUserId(req);
+    if (!userId) {
+        return null;
+    }
+
+    return RoomDrawParticipants.findOne({ user_id: userId }).lean();
+};
+
+const requiresRoomDrawPriority = async (req: Request) => {
+    if (!req.session.user) {
+        return false;
+    }
+
+    const participant = await getRoomDrawParticipant(req);
+    return !participant?.classYear || !participant?.drawDate;
+};
+
+const isBetterRoomDrawPriority = (
+    challenger: { classYear: number; drawDate: Date },
+    incumbent: { classYear: number; drawDate: Date },
+    roomYear?: number | null
+) => {
+    if (roomYear) {
+        const challengerMatchesRoomYear = challenger.classYear === roomYear;
+        const incumbentMatchesRoomYear = incumbent.classYear === roomYear;
+
+        if (challengerMatchesRoomYear !== incumbentMatchesRoomYear) {
+            return challengerMatchesRoomYear;
+        }
+    }
+
+    return challenger.drawDate.getTime() < incumbent.drawDate.getTime();
+};
+
+const getInitials = (name?: string, email?: string) => {
+    const nameInitials = String(name || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('');
+
+    if (nameInitials) {
+        return nameInitials;
+    }
+
+    return String(email || '')
+        .trim()
+        .slice(0, 2)
+        .toUpperCase();
+};
+
+const toRoomPreferencePayload = (
+    preference: Record<string, any>,
+    room?: Record<string, any> | null,
+    building?: Record<string, any> | null,
+    ownerPriority?: Record<string, any> | null
+) => ({
+    ...preference,
+    room,
+    building,
+    rankOwner: {
+        initials: getInitials(preference.user_name, preference.user_email),
+        name: preference.user_name,
+        rank: preference.rank,
+        classYear: ownerPriority?.classYear,
+        drawDate: ownerPriority?.drawDate,
+    },
+    bumpedBy:
+        preference.status === 'bumped'
+            ? {
+                  initials: getInitials(
+                      preference.bumpedByName,
+                      preference.bumpedByEmail
+                  ),
+                  name: preference.bumpedByName,
+                  classYear: preference.bumpedByClassYear,
+                  drawDate: preference.bumpedByDrawDate,
+                  bumpedAt: preference.bumpedAt,
+              }
+            : null,
+});
 
 /**
  * @route   GET /api/campus/housing
@@ -137,7 +324,7 @@ router.patch(
             }
 
             const updateData: Record<string, unknown> = {};
-            const { name, campus, floors, description } = req.body;
+            const { name, campus, floors, eligibleYear, description } = req.body;
 
             if (name !== undefined) {
                 const trimmedName = String(name).trim();
@@ -173,6 +360,26 @@ router.patch(
                 }
 
                 updateData.floors = parsedFloors;
+            }
+
+            if (eligibleYear !== undefined) {
+                const parsedEligibleYear = parseOptionalNumber(eligibleYear) as
+                    | number
+                    | null;
+                if (parsedEligibleYear === null) {
+                    updateData.eligibleYear = null;
+                } else if (
+                    !Number.isInteger(parsedEligibleYear) ||
+                    parsedEligibleYear < 1 ||
+                    parsedEligibleYear > 4
+                ) {
+                    res.status(400).json({
+                        message: 'Eligible year must be 1, 2, 3, or 4',
+                    });
+                    return;
+                } else {
+                    updateData.eligibleYear = parsedEligibleYear;
+                }
             }
 
             if (description !== undefined) {
@@ -239,6 +446,15 @@ router.patch(
                 occupancy_type,
                 closet_type,
                 bathroom_type,
+                floor,
+                eligibleYear,
+                sink,
+                closet,
+                closetType,
+                balcony,
+                privateBath,
+                suiteBath,
+                note,
             } = req.body;
 
             if (room_number !== undefined) {
@@ -276,10 +492,73 @@ router.patch(
                 occupancy_type,
                 closet_type,
                 bathroom_type,
+                floor,
+                eligibleYear,
             };
 
             for (const [field, value] of Object.entries(optionalNumberFields)) {
                 const parsedValue = parseOptionalNumber(value);
+                if (parsedValue === undefined) {
+                    continue;
+                }
+
+                if (parsedValue === null) {
+                    update.$unset[field] = '';
+                    continue;
+                }
+
+                if (
+                    (field === 'eligibleYear' &&
+                        (!Number.isInteger(parsedValue) ||
+                            parsedValue < 1 ||
+                            parsedValue > 4)) ||
+                    (field === 'floor' &&
+                        (!Number.isInteger(parsedValue) || parsedValue < 1))
+                ) {
+                    res.status(400).json({
+                        message:
+                            field === 'eligibleYear'
+                                ? 'Eligible year must be 1, 2, 3, or 4'
+                                : 'Floor must be a positive whole number',
+                    });
+                    return;
+                }
+
+                update.$set[field] = parsedValue;
+            }
+
+            const optionalBooleanFields = {
+                sink,
+                closet,
+                balcony,
+                privateBath,
+                suiteBath,
+            };
+
+            for (const [field, value] of Object.entries(optionalBooleanFields)) {
+                const parsedValue = parseOptionalBoolean(value);
+                if (parsedValue === undefined) {
+                    continue;
+                }
+
+                if (parsedValue === null) {
+                    update.$unset[field] = '';
+                    continue;
+                }
+
+                update.$set[field] = parsedValue;
+            }
+
+            const optionalTextFields = {
+                closetType: 80,
+                note: 300,
+            };
+
+            for (const [field, maxLength] of Object.entries(optionalTextFields)) {
+                const parsedValue = parseOptionalShortText(
+                    req.body[field],
+                    maxLength
+                );
                 if (parsedValue === undefined) {
                     continue;
                 }
@@ -333,6 +612,113 @@ router.get('/room-draw/settings', async (_req: Request, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+/**
+ * @route   GET /api/campus/housing/room-draw/priority
+ * @desc    Get the signed-in user's room draw priority
+ * @access  isAuthenticated
+ */
+router.get(
+    '/room-draw/priority',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room draw priority is only available during room draw',
+                });
+                return;
+            }
+
+            const participant = await getRoomDrawParticipant(req);
+            res.json({
+                ...settings,
+                priority: participant || null,
+                requiresPriority: !participant,
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   PUT /api/campus/housing/room-draw/priority
+ * @desc    Save the signed-in user's room draw priority
+ * @access  isAuthenticated
+ */
+router.put(
+    '/room-draw/priority',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room draw priority is only available during room draw',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            const sessionUser = req.session.user!;
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const classYear = Number(req.body.classYear);
+            const drawDate = req.body.drawDate
+                ? new Date(String(req.body.drawDate))
+                : null;
+
+            if (
+                !Number.isInteger(classYear) ||
+                classYear < 1 ||
+                classYear > 4
+            ) {
+                res.status(400).json({
+                    message: 'Year must be a number from 1 to 4',
+                });
+                return;
+            }
+
+            if (!drawDate || Number.isNaN(drawDate.getTime())) {
+                res.status(400).json({
+                    message: 'Draw date is required',
+                });
+                return;
+            }
+
+            const participant = await RoomDrawParticipants.findOneAndUpdate(
+                { user_id: userId },
+                {
+                    user_id: userId,
+                    user_email: userEmail,
+                    user_name: getSessionUserName(sessionUser),
+                    classYear,
+                    drawDate,
+                },
+                {
+                    new: true,
+                    upsert: true,
+                    runValidators: true,
+                    setDefaultsOnInsert: true,
+                }
+            );
+
+            res.json({
+                ...settings,
+                priority: participant,
+                requiresPriority: false,
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
 
 /**
  * @route   PATCH /api/campus/housing/room-draw/settings
@@ -506,6 +892,18 @@ router.get(
                 return;
             }
 
+            const participant = await getRoomDrawParticipant(req);
+            const needsPriority = Boolean(req.session.user) && !participant;
+            if (!req.session.user || needsPriority) {
+                res.json({
+                    ...settings,
+                    statuses: {},
+                    priority: participant || null,
+                    requiresPriority: needsPriority,
+                });
+                return;
+            }
+
             const rooms = await HousingRooms.find({
                 housing_building_id: buildingId,
             }).lean();
@@ -513,7 +911,7 @@ router.get(
             const statuses = await RoomDrawStatuses.find({
                 housing_room_id: { $in: roomIds },
             }).lean();
-            const sessionEmail = req.session.user?.email;
+            const sessionUserId = req.session.user?.id;
             const isSessionAdmin = Boolean(req.session.user?.isAdmin);
 
             const statusMap = statuses.reduce<
@@ -523,6 +921,7 @@ router.get(
                         status: 'taken';
                         isOwner: boolean;
                         updatedAt?: Date;
+                        markedByUserId?: string;
                         markedByName?: string;
                         markedByEmail?: string;
                     }
@@ -530,11 +929,13 @@ router.get(
             >((acc, status) => {
                 acc[status.housing_room_id] = {
                     status: 'taken',
-                    isOwner: status.markedByEmail === sessionEmail,
+                    isOwner: status.markedByUserId === sessionUserId,
                     updatedAt: status.updatedAt,
                 };
 
                 if (isSessionAdmin) {
+                    acc[status.housing_room_id].markedByUserId =
+                        status.markedByUserId;
                     acc[status.housing_room_id].markedByName =
                         status.markedByName;
                     acc[status.housing_room_id].markedByEmail =
@@ -544,7 +945,12 @@ router.get(
                 return acc;
             }, {});
 
-            res.json({ ...settings, statuses: statusMap });
+            res.json({
+                ...settings,
+                statuses: statusMap,
+                priority: participant || null,
+                requiresPriority: false,
+            });
         } catch (error) {
             res.status(500).json({ message: 'Server error' });
         }
@@ -565,6 +971,13 @@ router.patch(
             if (!settings.isVisible) {
                 res.status(403).json({
                     message: 'Room draw reporting is not active',
+                });
+                return;
+            }
+
+            if (await requiresRoomDrawPriority(req)) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room draw',
                 });
                 return;
             }
@@ -596,7 +1009,7 @@ router.patch(
 
             if (
                 existingStatus &&
-                existingStatus.markedByEmail !== sessionUser.email &&
+                existingStatus.markedByUserId !== sessionUser.id &&
                 !sessionUser.isAdmin
             ) {
                 res.status(403).json({
@@ -619,6 +1032,20 @@ router.patch(
                 return;
             }
 
+            if (!sessionUser.isAdmin) {
+                const existingUserClaim = await RoomDrawStatuses.findOne({
+                    markedByUserId: sessionUser.id,
+                    housing_room_id: { $ne: roomId },
+                });
+
+                if (existingUserClaim) {
+                    res.status(403).json({
+                        message: 'You can only mark one room taken at a time',
+                    });
+                    return;
+                }
+            }
+
             let updatedStatus;
             if (existingStatus) {
                 updatedStatus = await RoomDrawStatuses.findOneAndUpdate(
@@ -626,10 +1053,11 @@ router.patch(
                         ? { housing_room_id: roomId }
                         : {
                               housing_room_id: roomId,
-                              markedByEmail: sessionUser.email,
+                              markedByUserId: sessionUser.id,
                           },
                     {
                         status: 'taken',
+                        markedByUserId: sessionUser.id,
                         markedByEmail: sessionUser.email,
                         markedByName: getSessionUserName(sessionUser),
                     },
@@ -642,6 +1070,7 @@ router.patch(
                     updatedStatus = await RoomDrawStatuses.create({
                         housing_room_id: roomId,
                         status: 'taken',
+                        markedByUserId: sessionUser.id,
                         markedByEmail: sessionUser.email,
                         markedByName: getSessionUserName(sessionUser),
                     });
@@ -676,12 +1105,671 @@ router.patch(
                 updatedAt: updatedStatus.updatedAt,
                 ...(sessionUser.isAdmin
                     ? {
+                          markedByUserId: updatedStatus.markedByUserId,
                           markedByName: updatedStatus.markedByName,
                           markedByEmail: updatedStatus.markedByEmail,
                       }
                     : {}),
                 ...settings,
             });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   GET /api/campus/housing/room-preferences
+ * @desc    Get the signed-in user's ranked room preferences
+ * @access  isAuthenticated
+ */
+router.get(
+    '/room-preferences',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            if (await requiresRoomDrawPriority(req)) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room ranking',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const preferences = await RoomPreferences.find({
+                user_id: userId,
+                $or: [
+                    { status: 'active' },
+                    { status: 'bumped' },
+                    { status: { $exists: false } },
+                ],
+            })
+                .sort({ status: 1, rank: 1, updatedAt: -1 })
+                .lean();
+
+            const roomIds = preferences.map(
+                (preference) => preference.housing_room_id
+            );
+            const rooms = await HousingRooms.find({
+                id: { $in: roomIds },
+            }).lean();
+            const buildings = await HousingBuildings.find({
+                id: { $in: rooms.map((room) => room.housing_building_id) },
+            }).lean();
+            const participantIds = preferences.map(
+                (preference) => preference.user_id
+            );
+            const participants = await RoomDrawParticipants.find({
+                user_id: { $in: participantIds },
+            }).lean();
+
+            const roomsById = new Map(rooms.map((room) => [room.id, room]));
+            const buildingsById = new Map(
+                buildings.map((building) => [building.id, building])
+            );
+            const participantsByUserId = new Map(
+                participants.map((participant) => [
+                    participant.user_id,
+                    participant,
+                ])
+            );
+
+            res.json(
+                preferences.map((preference) => {
+                    const room = roomsById.get(preference.housing_room_id);
+                    const building = room
+                        ? buildingsById.get(room.housing_building_id)
+                        : null;
+
+                    return toRoomPreferencePayload(
+                        {
+                            ...preference,
+                            status: preference.status || 'active',
+                        },
+                        room,
+                        building,
+                        participantsByUserId.get(preference.user_id)
+                    );
+                })
+            );
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   PUT /api/campus/housing/room-preferences
+ * @desc    Replace the signed-in user's ranked room preference list
+ * @access  isAuthenticated
+ */
+router.put(
+    '/room-preferences',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            if (await requiresRoomDrawPriority(req)) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room ranking',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            const sessionUser = req.session.user!;
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const items: RoomPreferenceInput[] = Array.isArray(req.body.items)
+                ? req.body.items
+                : [];
+            if (items.length > MAX_ACTIVE_ROOM_PREFERENCES) {
+                res.status(400).json({
+                    message: 'You can rank up to 2 rooms',
+                });
+                return;
+            }
+
+            const normalizedItems: NormalizedRoomPreferenceInput[] = items.map(
+                (item, index) => ({
+                    housing_room_id: Number(item.housing_room_id),
+                    rank: index + 1,
+                    notes:
+                        item.notes === undefined
+                            ? undefined
+                            : String(item.notes).trim().slice(0, 500),
+                })
+            );
+
+            if (
+                normalizedItems.some(
+                    (item) => !Number.isInteger(item.housing_room_id)
+                )
+            ) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            const uniqueRoomIds = new Set(
+                normalizedItems.map((item) => item.housing_room_id)
+            );
+            if (uniqueRoomIds.size !== normalizedItems.length) {
+                res.status(400).json({
+                    message: 'A room can only appear once in your ranking',
+                });
+                return;
+            }
+
+            const activePreferences = await RoomPreferences.find({
+                user_id: userId,
+                housing_room_id: { $in: [...uniqueRoomIds] },
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+            });
+            if (activePreferences.length !== uniqueRoomIds.size) {
+                res.status(403).json({
+                    message: 'You can only save rooms you currently hold',
+                });
+                return;
+            }
+
+            await RoomPreferences.deleteMany({
+                user_id: userId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+                housing_room_id: { $nin: [...uniqueRoomIds] },
+            });
+
+            await Promise.all(
+                activePreferences.map((preference, index) => {
+                    preference.rank = 1000 + index;
+                    preference.status = 'active';
+                    return preference.save();
+                })
+            );
+
+            await Promise.all(
+                normalizedItems.map((item) =>
+                    RoomPreferences.findOneAndUpdate(
+                        {
+                            user_id: userId,
+                            housing_room_id: item.housing_room_id,
+                            $or: [
+                                { status: 'active' },
+                                { status: { $exists: false } },
+                            ],
+                        },
+                        {
+                            user_email: userEmail,
+                            user_name: getSessionUserName(sessionUser),
+                            rank: item.rank,
+                            notes: item.notes,
+                            status: 'active',
+                        },
+                        { runValidators: true }
+                    )
+                )
+            );
+
+            res.json({ message: 'Room preferences saved' });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   POST /api/campus/housing/room-preferences/rooms/:roomId
+ * @desc    Add a room to the signed-in user's ranked preference list
+ * @access  isAuthenticated
+ */
+router.post(
+    '/room-preferences/rooms/:roomId',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            if (await requiresRoomDrawPriority(req)) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room ranking',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            const sessionUser = req.session.user!;
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const roomId = parseInt(getParam(req.params.roomId), 10);
+            if (isNaN(roomId)) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            const room = (await HousingRooms.findOne({ id: roomId }).lean()) as {
+                eligibleYear?: number | null;
+            } | null;
+            if (!room) {
+                res.status(404).json({ message: 'Room not found' });
+                return;
+            }
+
+            const challengerPriority = await getRoomDrawParticipant(req);
+            if (!challengerPriority) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room ranking',
+                });
+                return;
+            }
+
+            const session = await mongoose.startSession();
+            let preference = null;
+            let bumpedPreference = null;
+            let alreadyInPreferences = false;
+
+            try {
+                await session.withTransaction(async () => {
+                    const existingPreference = await RoomPreferences.findOne({
+                        user_id: userId,
+                        housing_room_id: roomId,
+                        $or: [
+                            { status: 'active' },
+                            { status: { $exists: false } },
+                        ],
+                    }).session(session);
+                    if (existingPreference) {
+                        preference = existingPreference;
+                        alreadyInPreferences = true;
+                        return;
+                    }
+
+                    const preferenceCount = await RoomPreferences.countDocuments({
+                        user_id: userId,
+                        $or: [
+                            { status: 'active' },
+                            { status: { $exists: false } },
+                        ],
+                    }).session(session);
+                    if (preferenceCount >= MAX_ACTIVE_ROOM_PREFERENCES) {
+                        throw new Error('MAX_ACTIVE_ROOM_PREFERENCES');
+                    }
+                    const challengerRank = preferenceCount + 1;
+
+                    const currentRoomHolder = await RoomPreferences.findOne({
+                        housing_room_id: roomId,
+                        rank: challengerRank,
+                        $or: [
+                            { status: 'active' },
+                            { status: { $exists: false } },
+                        ],
+                    }).session(session);
+
+                    if (
+                        currentRoomHolder &&
+                        currentRoomHolder.user_id !== userId
+                    ) {
+                        const incumbentPriority =
+                            await RoomDrawParticipants.findOne({
+                                user_id: currentRoomHolder.user_id,
+                            })
+                                .session(session)
+                                .lean();
+
+                        if (
+                            incumbentPriority &&
+                            !isBetterRoomDrawPriority(
+                                challengerPriority,
+                                incumbentPriority,
+                                room.eligibleYear
+                            )
+                        ) {
+                            throw new Error('ROOM_PRIORITY_CONFLICT');
+                        }
+
+                        const bumpedPreferenceCount =
+                            await RoomPreferences.countDocuments({
+                                user_id: currentRoomHolder.user_id,
+                                status: 'bumped',
+                            }).session(session);
+                        currentRoomHolder.status = 'bumped';
+                        currentRoomHolder.rank = 1000 + bumpedPreferenceCount;
+                        currentRoomHolder.bumpedByUserId = userId;
+                        currentRoomHolder.bumpedByEmail = userEmail;
+                        currentRoomHolder.bumpedByName =
+                            getSessionUserName(sessionUser);
+                        currentRoomHolder.bumpedByClassYear =
+                            challengerPriority.classYear;
+                        currentRoomHolder.bumpedByDrawDate =
+                            challengerPriority.drawDate;
+                        currentRoomHolder.bumpedAt = new Date();
+                        bumpedPreference = await currentRoomHolder.save({
+                            session,
+                        });
+                    }
+
+                    await RoomPreferences.deleteOne(
+                        {
+                            user_id: userId,
+                            housing_room_id: roomId,
+                            status: 'bumped',
+                        },
+                        { session }
+                    );
+
+                    const [createdPreference] = await RoomPreferences.create(
+                        [
+                            {
+                                user_id: userId,
+                                user_email: userEmail,
+                                user_name: getSessionUserName(sessionUser),
+                                housing_room_id: roomId,
+                                rank: challengerRank,
+                                status: 'active',
+                            },
+                        ],
+                        { session }
+                    );
+                    preference = createdPreference;
+                });
+            } catch (error) {
+                if (
+                    error instanceof Error &&
+                    error.message === 'MAX_ACTIVE_ROOM_PREFERENCES'
+                ) {
+                    res.status(400).json({
+                        message: 'You can rank up to 2 rooms',
+                    });
+                    return;
+                }
+
+                if (
+                    error instanceof Error &&
+                    error.message === 'ROOM_PRIORITY_CONFLICT'
+                ) {
+                    res.status(409).json({
+                        message:
+                            'Room is already ranked by someone with better priority',
+                    });
+                    return;
+                }
+
+                if (
+                    typeof error === 'object' &&
+                    error !== null &&
+                    'code' in error &&
+                    error.code === 11000
+                ) {
+                    res.status(409).json({
+                        message:
+                            'Room ranking changed while you were updating. Please try again.',
+                    });
+                    return;
+                }
+
+                throw error;
+            } finally {
+                await session.endSession();
+            }
+
+            res.status(alreadyInPreferences ? 200 : 201).json({
+                message: bumpedPreference
+                    ? 'Room added to preferences and previous rank owner was bumped'
+                    : alreadyInPreferences
+                      ? 'Room is already in your preferences'
+                    : 'Room added to preferences',
+                preference,
+                bumpedPreference,
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   DELETE /api/campus/housing/room-preferences/rooms/:roomId
+ * @desc    Remove a room from the signed-in user's ranked preference list
+ * @access  isAuthenticated
+ */
+router.delete(
+    '/room-preferences/rooms/:roomId',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            if (await requiresRoomDrawPriority(req)) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room ranking',
+                });
+                return;
+            }
+
+            const userId = getSessionUserId(req);
+            const userEmail = getSessionUserEmail(req);
+            if (!userId || !userEmail) {
+                res.status(401).json({ message: 'Authentication required' });
+                return;
+            }
+
+            const roomId = parseInt(getParam(req.params.roomId), 10);
+            if (isNaN(roomId)) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            await RoomPreferences.deleteOne({
+                user_id: userId,
+                housing_room_id: roomId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+            });
+
+            const remainingPreferences = await RoomPreferences.find({
+                user_id: userId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+            }).sort({ rank: 1 });
+
+            await Promise.all(
+                remainingPreferences.map((preference, index) => {
+                    preference.rank = index + 1;
+                    return preference.save();
+                })
+            );
+
+            res.json({ message: 'Room removed from preferences' });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   GET /api/campus/housing/admin/room-preferences/summary
+ * @desc    Get aggregate room preference demand for admins
+ * @access  Admin
+ */
+router.get(
+    '/admin/room-preferences/summary',
+    isAdmin,
+    async (_req: Request, res: Response) => {
+        try {
+            const summary = await RoomPreferences.aggregate([
+                {
+                    $match: {
+                        $or: [
+                            { status: 'active' },
+                            { status: { $exists: false } },
+                        ],
+                    },
+                },
+                {
+                    $group: {
+                        _id: '$housing_room_id',
+                        preferenceCount: { $sum: 1 },
+                        averageRank: { $avg: '$rank' },
+                        topRank: { $min: '$rank' },
+                    },
+                },
+                { $sort: { preferenceCount: -1, averageRank: 1 } },
+            ]);
+
+            const roomIds = summary.map((item) => item._id);
+            const rooms = await HousingRooms.find({
+                id: { $in: roomIds },
+            }).lean();
+            const buildings = await HousingBuildings.find({
+                id: { $in: rooms.map((room) => room.housing_building_id) },
+            }).lean();
+            const roomsById = new Map(rooms.map((room) => [room.id, room]));
+            const buildingsById = new Map(
+                buildings.map((building) => [building.id, building])
+            );
+
+            res.json(
+                summary.map((item) => {
+                    const room = roomsById.get(item._id);
+                    const building = room
+                        ? buildingsById.get(room.housing_building_id)
+                        : null;
+
+                    return {
+                        housing_room_id: item._id,
+                        preferenceCount: item.preferenceCount,
+                        averageRank: item.averageRank,
+                        topRank: item.topRank,
+                        room,
+                        building,
+                    };
+                })
+            );
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   GET /api/campus/housing/:building/room-preferences/holders
+ * @desc    Get active ranked room holders for a building
+ * @access  isAuthenticated
+ */
+router.get(
+    '/:building/room-preferences/holders',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        try {
+            const buildingId = parseInt(getParam(req.params.building), 10);
+            if (isNaN(buildingId)) {
+                res.status(400).json({ message: 'Invalid building ID format' });
+                return;
+            }
+
+            const settings = await getRoomDrawSettingsPayload();
+            if (!settings.isVisible) {
+                res.status(403).json({
+                    message: 'Room ranking is only available during room draw',
+                });
+                return;
+            }
+
+            if (await requiresRoomDrawPriority(req)) {
+                res.status(403).json({
+                    message: 'Enter your draw priority before using room ranking',
+                });
+                return;
+            }
+
+            const rooms = await HousingRooms.find({
+                housing_building_id: buildingId,
+            }).lean();
+            const roomIds = rooms.map((room) => room.id);
+            const preferences = await RoomPreferences.find({
+                housing_room_id: { $in: roomIds },
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+            }).lean();
+            const participants = await RoomDrawParticipants.find({
+                user_id: { $in: preferences.map((preference) => preference.user_id) },
+            }).lean();
+            const participantsByUserId = new Map(
+                participants.map((participant) => [
+                    participant.user_id,
+                    participant,
+                ])
+            );
+
+            const holders = preferences.reduce<
+                Record<
+                    number,
+                    Array<{
+                        initials: string;
+                        name?: string;
+                        rank?: number;
+                        classYear?: number;
+                        drawDate?: Date;
+                        isOwner: boolean;
+                    }>
+                >
+            >((acc, preference) => {
+                const priority = participantsByUserId.get(preference.user_id);
+                if (!acc[preference.housing_room_id]) {
+                    acc[preference.housing_room_id] = [];
+                }
+
+                acc[preference.housing_room_id].push({
+                    initials: getInitials(
+                        preference.user_name,
+                        preference.user_email
+                    ),
+                    name: preference.user_name,
+                    rank: preference.rank,
+                    classYear: priority?.classYear,
+                    drawDate: priority?.drawDate,
+                    isOwner: preference.user_id === req.session.user?.id,
+                });
+                return acc;
+            }, {});
+
+            res.json(holders);
         } catch (error) {
             res.status(500).json({ message: 'Server error' });
         }
@@ -790,10 +1878,10 @@ router.get(
                 housing_room_id: roomId,
             }).lean();
 
-            const sessionEmail = req.session.user!.email;
-            const safeReviews = reviews.map(({ user_email, ...fields }) => ({
+            const sessionUserId = req.session.user!.id;
+            const safeReviews = reviews.map(({ user_id, user_email, ...fields }) => ({
                 ...fields,
-                isOwner: user_email === sessionEmail,
+                isOwner: user_id === sessionUserId,
             }));
 
             // Calculate average ratings
@@ -887,10 +1975,10 @@ router.get(
                 housing_room_id: roomData.id,
             }).lean();
 
-            const sessionEmail = req.session.user!.email;
-            const safeReviews = reviews.map(({ user_email, ...fields }) => ({
+            const sessionUserId = req.session.user!.id;
+            const safeReviews = reviews.map(({ user_id, user_email, ...fields }) => ({
                 ...fields,
-                isOwner: user_email === sessionEmail,
+                isOwner: user_id === sessionUserId,
             }));
 
             // Calculate average ratings
@@ -1022,18 +2110,22 @@ router.post(
                 return;
             }
 
-            // parse review fields from request
-            const { overall, quiet, layout, temperature, comments } = req.body;
+            const parsedReview = parseReviewPayload(req.body);
+            if ('message' in parsedReview) {
+                res.status(400).json({ message: parsedReview.message });
+                return;
+            }
 
             // construct review data
             const reviewData = {
                 id: maxId,
-                overall_rating: overall,
-                quiet_rating: quiet,
-                layout_rating: layout,
-                temperature_rating: temperature,
-                comments: comments,
+                overall_rating: parsedReview.value.overall,
+                quiet_rating: parsedReview.value.quiet,
+                layout_rating: parsedReview.value.layout,
+                temperature_rating: parsedReview.value.temperature,
+                comments: parsedReview.value.comments,
                 housing_room_id: roomData.id,
+                user_id: req.session.user!.id,
                 user_email: req.session.user!.email,
                 pictures: pictureIds,
             };
@@ -1044,7 +2136,8 @@ router.post(
             req.files = undefined; // free up memory
             res.status(201).json({ message: 'Review saved successfully' });
         } catch (error) {
-            res.status(400).json({ message: 'Error creating member' });
+            console.error('Review create error:', error);
+            res.status(500).json({ message: 'Server error' });
         }
     }
 );
@@ -1073,16 +2166,19 @@ router.patch(
                 return;
             }
 
-            // parse review fields from request
-            const { overall, quiet, layout, temperature, comments } = req.body;
+            const parsedReview = parseReviewPayload(req.body);
+            if ('message' in parsedReview) {
+                res.status(400).json({ message: parsedReview.message });
+                return;
+            }
 
             // construct review data
             let updateData = {
-                overall_rating: overall,
-                quiet_rating: quiet,
-                layout_rating: layout,
-                temperature_rating: temperature,
-                comments: comments,
+                overall_rating: parsedReview.value.overall,
+                quiet_rating: parsedReview.value.quiet,
+                layout_rating: parsedReview.value.layout,
+                temperature_rating: parsedReview.value.temperature,
+                comments: parsedReview.value.comments,
                 pictures: oldReview.pictures,
             };
 
@@ -1148,7 +2244,7 @@ router.patch(
             });
         } catch (error) {
             console.error('update error: ', error);
-            res.status(400).json({ message: 'Error updating review' });
+            res.status(500).json({ message: 'Server error' });
         }
     }
 );

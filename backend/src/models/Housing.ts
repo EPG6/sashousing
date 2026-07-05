@@ -6,6 +6,7 @@ interface IHousingBuildings extends Document {
     name: string;
     campus: string;
     floors: number;
+    eligibleYear?: number;
     description?: string;
 }
 
@@ -29,6 +30,11 @@ const HousingBuildingsSchema = new Schema<IHousingBuildings>({
         default: 1,
         required: true,
     },
+    eligibleYear: {
+        type: Number,
+        min: 1,
+        max: 4,
+    },
     description: {
         type: String,
     },
@@ -45,6 +51,15 @@ interface IHousingRooms extends Document {
     occupancy_type?: number;
     closet_type?: number;
     bathroom_type?: number;
+    floor?: number;
+    eligibleYear?: number;
+    sink?: boolean;
+    closet?: boolean;
+    closetType?: string;
+    balcony?: boolean;
+    privateBath?: boolean;
+    suiteBath?: boolean;
+    note?: string;
     // housing_suite_id?: number; // TODO: DELETE
     housing_building_id: number;
     room_number: string;
@@ -67,6 +82,40 @@ const HousingRoomsSchema = new Schema<IHousingRooms>({
     },
     bathroom_type: {
         type: Number,
+    },
+    floor: {
+        type: Number,
+        min: 1,
+    },
+    eligibleYear: {
+        type: Number,
+        min: 1,
+        max: 4,
+    },
+    sink: {
+        type: Boolean,
+    },
+    closet: {
+        type: Boolean,
+    },
+    closetType: {
+        type: String,
+        trim: true,
+        maxlength: 80,
+    },
+    balcony: {
+        type: Boolean,
+    },
+    privateBath: {
+        type: Boolean,
+    },
+    suiteBath: {
+        type: Boolean,
+    },
+    note: {
+        type: String,
+        trim: true,
+        maxlength: 300,
     },
     // housing_suite_id: { // TODO: DELETE
     //     type: Number,
@@ -98,6 +147,7 @@ interface IHousingReviews extends Document {
     temperature_rating?: number;
     comments?: string;
     housing_room_id: number;
+    user_id: string;
     user_email: string;
     pictures: mongoose.Types.ObjectId[]; // list of picture _ids
 }
@@ -130,8 +180,15 @@ const HousingReviewsSchema = new Schema<IHousingReviews>(
             required: true,
             index: true,
         },
+        user_id: {
+            type: String,
+            required: true,
+            index: true,
+        },
         user_email: {
             type: String,
+            lowercase: true,
+            trim: true,
         },
         pictures: [
             {
@@ -183,9 +240,61 @@ const RoomDrawSettings =
         RoomDrawSettingsSchema
     );
 
+interface IRoomDrawParticipant extends Document {
+    user_id: string;
+    user_email: string;
+    user_name?: string;
+    classYear: number;
+    drawDate: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const RoomDrawParticipantSchema = new Schema<IRoomDrawParticipant>(
+    {
+        user_id: {
+            type: String,
+            required: true,
+            unique: true,
+            index: true,
+        },
+        user_email: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true,
+        },
+        user_name: {
+            type: String,
+        },
+        classYear: {
+            type: Number,
+            required: true,
+            min: 1,
+            max: 4,
+        },
+        drawDate: {
+            type: Date,
+            required: true,
+        },
+    },
+    {
+        timestamps: true,
+    }
+);
+
+const RoomDrawParticipants =
+    (mongoose.models
+        .RoomDrawParticipants as mongoose.Model<IRoomDrawParticipant>) ||
+    mongoose.model<IRoomDrawParticipant>(
+        'RoomDrawParticipants',
+        RoomDrawParticipantSchema
+    );
+
 interface IRoomDrawStatus extends Document {
     housing_room_id: number;
     status: 'taken';
+    markedByUserId: string;
     markedByEmail: string;
     markedByName?: string;
     createdAt: Date;
@@ -206,6 +315,11 @@ const RoomDrawStatusSchema = new Schema<IRoomDrawStatus>(
             enum: ['taken'],
             default: 'taken',
             required: true,
+        },
+        markedByUserId: {
+            type: String,
+            required: true,
+            index: true,
         },
         markedByEmail: {
             type: String,
@@ -229,10 +343,112 @@ const RoomDrawStatuses =
         RoomDrawStatusSchema
     );
 
+interface IRoomPreference extends Document {
+    user_id: string;
+    user_email: string;
+    user_name?: string;
+    housing_room_id: number;
+    rank: number;
+    notes?: string;
+    status: 'active' | 'bumped';
+    bumpedByUserId?: string;
+    bumpedByEmail?: string;
+    bumpedByName?: string;
+    bumpedByClassYear?: number;
+    bumpedByDrawDate?: Date;
+    bumpedAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const RoomPreferenceSchema = new Schema<IRoomPreference>(
+    {
+        user_id: {
+            type: String,
+            required: true,
+            index: true,
+        },
+        user_email: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true,
+            index: true,
+        },
+        user_name: {
+            type: String,
+        },
+        housing_room_id: {
+            type: Number,
+            required: true,
+            ref: 'HousingRooms',
+            index: true,
+        },
+        rank: {
+            type: Number,
+            required: true,
+            min: 1,
+        },
+        notes: {
+            type: String,
+        },
+        status: {
+            type: String,
+            enum: ['active', 'bumped'],
+            default: 'active',
+            required: true,
+            index: true,
+        },
+        bumpedByUserId: {
+            type: String,
+        },
+        bumpedByEmail: {
+            type: String,
+            lowercase: true,
+            trim: true,
+        },
+        bumpedByName: {
+            type: String,
+        },
+        bumpedByClassYear: {
+            type: Number,
+            min: 1,
+            max: 4,
+        },
+        bumpedByDrawDate: {
+            type: Date,
+        },
+        bumpedAt: {
+            type: Date,
+        },
+    },
+    {
+        timestamps: true,
+    }
+);
+
+RoomPreferenceSchema.index(
+    { user_id: 1, housing_room_id: 1, status: 1 },
+    { unique: true }
+);
+RoomPreferenceSchema.index(
+    { user_id: 1, rank: 1 },
+    { unique: true, partialFilterExpression: { status: 'active' } }
+);
+RoomPreferenceSchema.index(
+    { housing_room_id: 1, rank: 1 },
+    { unique: true, partialFilterExpression: { status: 'active' } }
+);
+const RoomPreferences =
+    (mongoose.models.RoomPreferences as mongoose.Model<IRoomPreference>) ||
+    mongoose.model<IRoomPreference>('RoomPreferences', RoomPreferenceSchema);
+
 export {
     HousingBuildings,
     HousingRooms,
     HousingReviews,
     RoomDrawSettings,
+    RoomDrawParticipants,
     RoomDrawStatuses,
+    RoomPreferences,
 };

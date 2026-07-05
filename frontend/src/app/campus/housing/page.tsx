@@ -6,6 +6,12 @@ import { useEffect, useMemo, useState } from 'react';
 import Loading from '@/components/Loading';
 import { backendUrl } from '@/utils/api';
 import SiteHeader from '@/components/SiteHeader';
+import { useAuth } from '@/hooks/useAuth';
+import { RoomDrawSettings } from '@/types';
+import {
+    getBuildingDisplayDescription,
+    getBuildingSlug,
+} from '@/utils/housingText';
 
 type BuildingDoc = {
     id: number;
@@ -19,7 +25,6 @@ type BuildingDoc = {
 type BuildingCard = {
     id: number;
     name: string;
-    image: string;
     description: string;
     floors: number;
     roomNumbers: string[];
@@ -30,10 +35,24 @@ type CampusGroup = {
     buildings: BuildingCard[];
 };
 
+const BuildingImage = ({ building }: { building: BuildingCard }) => {
+    return (
+        <Image
+            src="/housing/accommodation-hero.jpg"
+            alt={building.name}
+            width={800}
+            height={400}
+            className="w-full h-48 object-cover"
+        />
+    );
+};
+
 const HousingPage = () => {
+    const { user, loading: authLoading } = useAuth();
     const [housingData, setHousingData] = useState<CampusGroup[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
+    const [roomDrawVisible, setRoomDrawVisible] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
     const searchTokens = normalizedSearchQuery.split(/\s+/).filter(Boolean);
@@ -41,18 +60,24 @@ const HousingPage = () => {
     useEffect(() => {
         const fetchHousingData = async () => {
             try {
-                const response = await fetch(
-                    `${backendUrl}/api/campus/housing/search-index`,
-                    {
+                const [response, settingsResponse] = await Promise.all([
+                    fetch(`${backendUrl}/api/campus/housing/search-index`, {
                         credentials: 'include',
-                    }
-                );
+                    }),
+                    fetch(`${backendUrl}/api/campus/housing/room-draw/settings`, {
+                        credentials: 'include',
+                    }),
+                ]);
 
                 if (!response.ok) {
                     throw new Error('Failed to fetch housing data');
                 }
 
                 const buildings = (await response.json()) as BuildingDoc[];
+                const settings = settingsResponse.ok
+                    ? ((await settingsResponse.json()) as RoomDrawSettings)
+                    : null;
+                setRoomDrawVisible(Boolean(settings?.isVisible));
 
                 // Organize buildings by campus
                 const organizedData: CampusGroup[] = buildings.reduce(
@@ -65,11 +90,7 @@ const HousingPage = () => {
                         const buildingCard: BuildingCard = {
                             id: building.id,
                             name: building.name,
-                            image: `/buildings/${building.name
-                                .toLowerCase()
-                                .replace(/\s+/g, '-')
-                                .replace(/-+/g, '-')}.jpg`,
-                            description: building.description,
+                            description: getBuildingDisplayDescription(building),
                             floors: building.floors,
                             roomNumbers: building.roomNumbers || [],
                         };
@@ -149,7 +170,7 @@ const HousingPage = () => {
             .slice(0, 5);
     };
 
-    if (loading) {
+    if (loading || authLoading) {
         return <Loading />;
     }
 
@@ -176,6 +197,14 @@ const HousingPage = () => {
                         Browse residence halls and room reviews from the student
                         community.
                     </p>
+                    {user && roomDrawVisible && (
+                        <Link
+                            href="/campus/housing/preferences"
+                            className="mt-4 inline-flex rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            View My Ranking
+                        </Link>
+                    )}
                 </div>
 
                 <div className="mb-8 max-w-xl">
@@ -206,7 +235,9 @@ const HousingPage = () => {
                                     <Link
                                         key={building.id}
                                         href={{
-                                            pathname: `/campus/housing/${building.id}`,
+                                            pathname: `/campus/housing/${getBuildingSlug(
+                                                building.name
+                                            )}`,
                                             query:
                                                 matchingRooms.length > 0
                                                     ? {
@@ -217,13 +248,7 @@ const HousingPage = () => {
                                         }}
                                         className="block overflow-hidden rounded-md border border-sas-line bg-sas-white shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:border-sas-green"
                                     >
-                                        <Image
-                                            src={building.image}
-                                            alt={building.name}
-                                            width={800}
-                                            height={400}
-                                            className="w-full h-48 object-cover"
-                                        />
+                                        <BuildingImage building={building} />
                                         <div className="p-6">
                                             <h3 className="mb-2 font-display text-xl font-semibold text-sas-black sm:text-2xl">
                                                 {building.name}
