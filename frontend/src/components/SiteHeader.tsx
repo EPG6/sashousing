@@ -3,10 +3,11 @@
 import { useAuth } from '@/hooks/useAuth';
 import { backendUrl } from '@/utils/api';
 import { getFirebaseAuth } from '@/utils/firebase';
+import { renderGoogleSignInButton } from '@/utils/googleSignIn';
 import { signOut } from 'firebase/auth';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 const navLinks = [
@@ -29,8 +30,19 @@ type SiteHeaderProps = {
 
 export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
     const pathname = usePathname();
-    const { user } = useAuth();
+    const { user, loading } = useAuth();
     const [loggingOut, setLoggingOut] = useState(false);
+    const googleButtonRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (loading || user || !googleButtonRef.current) return;
+
+        renderGoogleSignInButton(
+            googleButtonRef.current,
+            () => window.location.reload(),
+            (error) => console.error('Login failed:', error)
+        );
+    }, [loading, user]);
 
     const logout = async () => {
         setLoggingOut(true);
@@ -91,7 +103,7 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
                             Scripps Associated Students
                         </span>
 
-                        {user?.isAdmin && (
+                        {!loading && user?.isAdmin && (
                             <Link
                                 href="/admin/housing-data"
                                 onClick={(event) =>
@@ -106,25 +118,30 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
                             </Link>
                         )}
 
-                        {user && (
-                            <button
-                                type="button"
-                                onClick={logout}
-                                disabled={loggingOut}
-                                className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
-                            >
-                                {loggingOut ? (
-                                    '...'
-                                ) : (
-                                    <>
-                                        <span className="sm:hidden">Out</span>
-                                        <span className="hidden sm:inline">
-                                            Sign out
-                                        </span>
-                                    </>
-                                )}
-                            </button>
-                        )}
+                        {!loading &&
+                            (user ? (
+                                <button
+                                    type="button"
+                                    onClick={logout}
+                                    disabled={loggingOut}
+                                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                                >
+                                    {loggingOut ? (
+                                        '...'
+                                    ) : (
+                                        <>
+                                            <span className="sm:hidden">
+                                                Out
+                                            </span>
+                                            <span className="hidden sm:inline">
+                                                Sign out
+                                            </span>
+                                        </>
+                                    )}
+                                </button>
+                            ) : (
+                                <div ref={googleButtonRef} />
+                            ))}
                     </div>
                 </div>
 

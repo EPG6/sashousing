@@ -14,7 +14,7 @@ import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 import { getBuildingSlug } from '@/utils/housingText';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 
 type BuildingSearchDoc = {
     id: number;
@@ -41,7 +41,6 @@ const RoomPage = () => {
     const [showCancelEditModal, setShowCancelEditModal] = useState(false);
     const [pageMessage, setPageMessage] = useState<string | null>(null);
     const [pageError, setPageError] = useState<string | null>(null);
-    const { user, loading: authLoading } = useAuth();
 
     const handleAddNewReviewClick = (shouldScrollToForm = false) => {
         if (isCreatingNew) {
@@ -150,7 +149,7 @@ const RoomPage = () => {
           ? 'Cancel new review'
           : 'Add Review';
 
-    if (loading || authLoading) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-sas-mist text-sas-black">
                 <SiteHeader />
@@ -169,10 +168,6 @@ const RoomPage = () => {
                 </div>
             </div>
         );
-    }
-
-    if (!user) {
-        return <LoginRequired />;
     }
 
     const formatDate = (date: Date) => {
@@ -228,62 +223,63 @@ const RoomPage = () => {
     return (
         <div className="min-h-screen bg-sas-mist text-sas-black">
             <SiteHeader />
-            <AppModal
-                isOpen={showCancelEditModal}
-                title="Cancel Review Edit?"
-                onClose={() => setShowCancelEditModal(false)}
-                actions={
-                    <>
-                        <button
-                            type="button"
-                            onClick={() => setShowCancelEditModal(false)}
-                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
-                        >
-                            Keep Editing
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setSelectedReview(null);
-                                setShowCancelEditModal(false);
-                            }}
-                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
-                        >
-                            Discard Changes
-                        </button>
-                    </>
-                }
-            >
-                Any changes in the review form will be lost.
-            </AppModal>
-            <AppModal
-                isOpen={pendingDeleteReviewId !== null}
-                title="Delete Review?"
-                onClose={() => setPendingDeleteReviewId(null)}
-                actions={
-                    <>
-                        <button
-                            type="button"
-                            onClick={() => setPendingDeleteReviewId(null)}
-                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleDelete}
-                            className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
-                        >
-                            Delete Review
-                        </button>
-                    </>
-                }
-            >
-                This review will be permanently removed.
-            </AppModal>
-            <div
-                className={`mx-auto max-w-6xl px-4 py-8 sm:px-6 ${!isCreatingNew && !selectedReview ? 'pb-24' : ''}`}
-            >
+            <RoomReviewAuthBoundary>
+                <AppModal
+                    isOpen={showCancelEditModal}
+                    title="Cancel Review Edit?"
+                    onClose={() => setShowCancelEditModal(false)}
+                    actions={
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setShowCancelEditModal(false)}
+                                className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                            >
+                                Keep Editing
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSelectedReview(null);
+                                    setShowCancelEditModal(false);
+                                }}
+                                className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                            >
+                                Discard Changes
+                            </button>
+                        </>
+                    }
+                >
+                    Any changes in the review form will be lost.
+                </AppModal>
+                <AppModal
+                    isOpen={pendingDeleteReviewId !== null}
+                    title="Delete Review?"
+                    onClose={() => setPendingDeleteReviewId(null)}
+                    actions={
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setPendingDeleteReviewId(null)}
+                                className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                className="rounded-md bg-sas-green px-4 py-2 text-sm font-medium text-sas-white hover:bg-sas-black"
+                            >
+                                Delete Review
+                            </button>
+                        </>
+                    }
+                >
+                    This review will be permanently removed.
+                </AppModal>
+                <div
+                    className={`mx-auto max-w-6xl px-4 py-8 sm:px-6 ${!isCreatingNew && !selectedReview ? 'pb-24' : ''}`}
+                >
                 {/* Back Button */}
                 <button
                     onClick={() => router.back()}
@@ -630,18 +626,33 @@ const RoomPage = () => {
                         {reviewActionLabel}
                     </button>
                 </div>
-            </div>
-            {!isCreatingNew && !selectedReview && (
-                <button
-                    type="button"
-                    onClick={() => handleAddNewReviewClick(true)}
-                    className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-30 rounded-md bg-sas-green px-5 py-3 font-medium text-sas-white shadow-lg transition-colors hover:bg-sas-black focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2 sm:bottom-6 sm:left-auto sm:right-6"
-                >
-                    Add Review
-                </button>
-            )}
+                </div>
+                {!isCreatingNew && !selectedReview && (
+                    <button
+                        type="button"
+                        onClick={() => handleAddNewReviewClick(true)}
+                        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 right-4 z-30 rounded-md bg-sas-green px-5 py-3 font-medium text-sas-white shadow-lg transition-colors hover:bg-sas-black focus:outline-none focus:ring-2 focus:ring-sas-green focus:ring-offset-2 sm:bottom-6 sm:left-auto sm:right-6"
+                    >
+                        Add Review
+                    </button>
+                )}
+            </RoomReviewAuthBoundary>
         </div>
     );
 };
+
+function RoomReviewAuthBoundary({ children }: { children: ReactNode }) {
+    const { user, loading } = useAuth();
+
+    if (loading) {
+        return null;
+    }
+
+    if (!user) {
+        return <LoginRequired />;
+    }
+
+    return <>{children}</>;
+}
 
 export default RoomPage;
