@@ -30,6 +30,12 @@ type BuildingSearchDoc = Building & {
     roomNumbers: string[];
 };
 
+type RoomDrawSettingsEvent = {
+    startsAt: string | null;
+    endsAt: string | null;
+    isVisible: boolean;
+};
+
 const toDateTimeInputValue = (value?: string | Date | null) => {
     if (!value) {
         return '';
@@ -259,6 +265,59 @@ export default function DynamicRooms() {
         setRoomSearchQuery(initialRoomSearchQuery);
     }, [initialRoomSearchQuery]);
 
+    const refreshRoomDrawStatuses = async () => {
+        if (resolvedBuildingId === null) {
+            return;
+        }
+
+        const response = await fetch(
+            `${backendUrl}/api/campus/housing/${resolvedBuildingId}/room-draw/statuses`,
+            { credentials: 'include' }
+        );
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = (await response.json()) as RoomDrawStatusResponse;
+        setRoomDrawVisible(data.isVisible);
+        setRoomDrawRequiresPriority(Boolean(data.requiresPriority));
+        setRooms((currentRooms) =>
+            currentRooms.map((currentRoom) => ({
+                ...currentRoom,
+                roomDrawStatus: data.statuses[currentRoom.id],
+            }))
+        );
+    };
+
+    useEffect(() => {
+        if (!roomDrawVisible || resolvedBuildingId === null) {
+            return;
+        }
+
+        const eventSource = new EventSource(
+            `${backendUrl}/api/campus/housing/${resolvedBuildingId}/room-draw/status-events`,
+            { withCredentials: true }
+        );
+
+        const handleStatusEvent = () => {
+            void refreshRoomDrawStatuses();
+        };
+
+        eventSource.addEventListener(
+            'room-draw-status',
+            handleStatusEvent
+        );
+
+        return () => {
+            eventSource.removeEventListener(
+                'room-draw-status',
+                handleStatusEvent
+            );
+            eventSource.close();
+        };
+    }, [resolvedBuildingId, roomDrawVisible]);
+
     const updateRoomDrawStatus = async (
         roomId: number,
         nextStatus: 'taken' | 'not_taken'
@@ -284,27 +343,7 @@ export default function DynamicRooms() {
             );
         }
 
-        const data = await response.json();
-        setRooms((currentRooms) =>
-            currentRooms.map((currentRoom) =>
-                currentRoom.id === roomId
-                    ? {
-                          ...currentRoom,
-                          roomDrawStatus:
-                              data.status === 'taken'
-                                  ? {
-                                        status: 'taken',
-                                        isOwner: data.isOwner,
-                                        updatedAt: data.updatedAt,
-                                        markedByUserId: data.markedByUserId,
-                                        markedByName: data.markedByName,
-                                        markedByEmail: data.markedByEmail,
-                                    }
-                                  : undefined,
-                      }
-                    : currentRoom
-            )
-        );
+        await refreshRoomDrawStatuses();
     };
 
     const saveRoomDrawPriority = async (
@@ -439,6 +478,76 @@ export default function DynamicRooms() {
             }))
         );
     };
+
+    useEffect(() => {
+        if (!user || !roomDrawVisible || roomDrawRequiresPriority || resolvedBuildingId === null) {
+            return;
+        }
+
+        const eventSource = new EventSource(
+            `${backendUrl}/api/campus/housing/${resolvedBuildingId}/room-preferences/events`,
+            { withCredentials: true }
+        );
+
+        const handlePreferenceEvent = () => {
+            void refreshRoomPreferences();
+        };
+
+        eventSource.addEventListener(
+            'room-preferences-changed',
+            handlePreferenceEvent
+        );
+
+        return () => {
+            eventSource.removeEventListener(
+                'room-preferences-changed',
+                handlePreferenceEvent
+            );
+            eventSource.close();
+        };
+    }, [resolvedBuildingId, roomDrawRequiresPriority, roomDrawVisible, user]);
+
+    useEffect(() => {
+        const eventSource = new EventSource(
+            `${backendUrl}/api/campus/housing/room-draw/settings-events`,
+            { withCredentials: true }
+        );
+
+        const handleSettingsEvent = (event: MessageEvent<string>) => {
+            let data: RoomDrawSettingsEvent;
+            try {
+                data = JSON.parse(event.data) as RoomDrawSettingsEvent;
+            } catch {
+                return;
+            }
+
+            setRoomDrawVisible(data.isVisible);
+            if (!data.isVisible) {
+                setRoomDrawRequiresPriority(false);
+                setPreferenceRoomIds(new Set());
+                setRooms((currentRooms) =>
+                    currentRooms.map((room) => ({
+                        ...room,
+                        roomDrawStatus: undefined,
+                        roomPreferenceHolders: undefined,
+                    }))
+                );
+            }
+        };
+
+        eventSource.addEventListener(
+            'room-draw-settings',
+            handleSettingsEvent as EventListener
+        );
+
+        return () => {
+            eventSource.removeEventListener(
+                'room-draw-settings',
+                handleSettingsEvent as EventListener
+            );
+            eventSource.close();
+        };
+    }, []);
 
     const addRoomPreference = async (roomId: number) => {
         const response = await fetch(

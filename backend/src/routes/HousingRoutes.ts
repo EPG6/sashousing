@@ -21,6 +21,84 @@ const router = express.Router();
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
+const roomDrawStatusSubscribers = new Map<number, Set<Response>>();
+const roomPreferenceSubscribers = new Map<number, Set<Response>>();
+const userPreferenceSubscribers = new Map<string, Set<Response>>();
+const roomDrawSettingsSubscribers = new Set<Response>();
+
+type RoomDrawStatusEvent = {
+    buildingId: number;
+    roomId: number;
+    status: 'taken' | 'not_taken';
+    updatedAt?: Date;
+};
+
+const sendSseEvent = (
+    response: Response,
+    eventName: string,
+    data: unknown
+) => {
+    response.write(`event: ${eventName}\n`);
+    response.write(`data: ${JSON.stringify(data)}\n\n`);
+};
+
+const broadcastRoomDrawStatusEvent = (event: RoomDrawStatusEvent) => {
+    const subscribers = roomDrawStatusSubscribers.get(event.buildingId);
+    if (!subscribers) {
+        return;
+    }
+
+    subscribers.forEach((subscriber) => {
+        sendSseEvent(subscriber, 'room-draw-status', event);
+    });
+};
+
+const broadcastRoomPreferenceEvent = (buildingIds: Iterable<number>) => {
+    new Set(buildingIds).forEach((buildingId) => {
+        const subscribers = roomPreferenceSubscribers.get(buildingId);
+        if (!subscribers) {
+            return;
+        }
+
+        subscribers.forEach((subscriber) => {
+            sendSseEvent(subscriber, 'room-preferences-changed', {
+                buildingId,
+            });
+        });
+    });
+};
+
+const broadcastUserPreferenceEvent = (userIds: Iterable<string>) => {
+    new Set(userIds).forEach((userId) => {
+        const subscribers = userPreferenceSubscribers.get(userId);
+        if (!subscribers) {
+            return;
+        }
+
+        subscribers.forEach((subscriber) => {
+            sendSseEvent(subscriber, 'user-preferences-changed', {});
+        });
+    });
+};
+
+const broadcastRoomDrawSettingsEvent = async () => {
+    const settings = await getRoomDrawSettingsPayload();
+    roomDrawSettingsSubscribers.forEach((subscriber) => {
+        sendSseEvent(subscriber, 'room-draw-settings', settings);
+    });
+};
+
+const getBuildingIdsForRoomIds = async (roomIds: number[]) => {
+    if (roomIds.length === 0) {
+        return [];
+    }
+
+    const rooms = await HousingRooms.find({ id: { $in: roomIds } })
+        .select('housing_building_id')
+        .lean();
+
+    return rooms.map((room) => room.housing_building_id);
+};
 
 const getParam = (param: string | string[]): string =>
     Array.isArray(param) ? param[0] : param;
@@ -735,6 +813,30 @@ router.get('/room-draw/settings', async (_req: Request, res: Response) => {
 });
 
 /**
+ * @route   GET /api/campus/housing/room-draw/settings-events
+ * @desc    Subscribe to room draw window changes
+ * @access  Public
+ */
+router.get('/room-draw/settings-events', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    roomDrawSettingsSubscribers.add(res);
+    sendSseEvent(res, 'connected', {});
+
+    const keepAlive = setInterval(() => {
+        res.write(': keep-alive\n\n');
+    }, 25000);
+
+    req.on('close', () => {
+        clearInterval(keepAlive);
+        roomDrawSettingsSubscribers.delete(res);
+    });
+});
+
+/**
  * @route   GET /api/campus/housing/room-draw/priority
  * @desc    Get the signed-in user's room draw priority
  * @access  isAuthenticated
@@ -830,6 +932,19 @@ router.put(
                 }
             );
 
+            const userPreferences = await RoomPreferences.find({
+                user_id: userId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+            }).lean();
+            broadcastRoomPreferenceEvent(
+                await getBuildingIdsForRoomIds(
+                    userPreferences.map(
+                        (preference) => preference.housing_room_id
+                    )
+                )
+            );
+            broadcastUserPreferenceEvent([userId]);
+
             res.json({
                 ...settings,
                 priority: participant,
@@ -889,7 +1004,9 @@ router.patch(
                 }
             );
 
-            res.json(await getRoomDrawSettingsPayload());
+            const payload = await getRoomDrawSettingsPayload();
+            await broadcastRoomDrawSettingsEvent();
+            res.json(payload);
         } catch (error) {
             res.status(500).json({ message: 'Server error' });
         }
@@ -906,7 +1023,30 @@ router.post(
     isAdmin,
     async (_req: Request, res: Response) => {
         try {
+            const statuses = await RoomDrawStatuses.find({}).lean();
+            const roomIds = statuses.map((status) => status.housing_room_id);
+            const rooms = await HousingRooms.find({
+                id: { $in: roomIds },
+            })
+                .select('id housing_building_id')
+                .lean();
+            const buildingIdByRoomId = new Map(
+                rooms.map((room) => [room.id, room.housing_building_id])
+            );
             const result = await RoomDrawStatuses.deleteMany({});
+
+            statuses.forEach((status) => {
+                const buildingId = buildingIdByRoomId.get(status.housing_room_id);
+                if (buildingId) {
+                    broadcastRoomDrawStatusEvent({
+                        buildingId,
+                        roomId: status.housing_room_id,
+                        status: 'not_taken',
+                        updatedAt: new Date(),
+                    });
+                }
+            });
+
             res.json({
                 message: 'Room draw statuses cleared',
                 deletedCount: result.deletedCount,
@@ -943,6 +1083,7 @@ router.post(
                 }
             );
 
+            await broadcastRoomDrawSettingsEvent();
             res.json({
                 ...(await getRoomDrawSettingsPayload()),
                 message: 'Room draw ended',
@@ -979,7 +1120,31 @@ router.post(
                 }
             );
 
+            const statuses = await RoomDrawStatuses.find({}).lean();
+            const roomIds = statuses.map((status) => status.housing_room_id);
+            const rooms = await HousingRooms.find({
+                id: { $in: roomIds },
+            })
+                .select('id housing_building_id')
+                .lean();
+            const buildingIdByRoomId = new Map(
+                rooms.map((room) => [room.id, room.housing_building_id])
+            );
             const result = await RoomDrawStatuses.deleteMany({});
+
+            statuses.forEach((status) => {
+                const buildingId = buildingIdByRoomId.get(status.housing_room_id);
+                if (buildingId) {
+                    broadcastRoomDrawStatusEvent({
+                        buildingId,
+                        roomId: status.housing_room_id,
+                        status: 'not_taken',
+                        updatedAt: new Date(),
+                    });
+                }
+            });
+
+            await broadcastRoomDrawSettingsEvent();
             res.json({
                 ...(await getRoomDrawSettingsPayload()),
                 message: 'Room draw closed and statuses cleared',
@@ -1079,6 +1244,48 @@ router.get(
 );
 
 /**
+ * @route   GET /api/campus/housing/:building/room-draw/status-events
+ * @desc    Subscribe to room draw status changes for a building
+ * @access  Public
+ */
+router.get(
+    '/:building/room-draw/status-events',
+    async (req: Request, res: Response) => {
+        const buildingId = parseInt(getParam(req.params.building), 10);
+
+        if (isNaN(buildingId)) {
+            res.status(400).json({ message: 'Invalid building ID format' });
+            return;
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders?.();
+
+        if (!roomDrawStatusSubscribers.has(buildingId)) {
+            roomDrawStatusSubscribers.set(buildingId, new Set());
+        }
+
+        const subscribers = roomDrawStatusSubscribers.get(buildingId)!;
+        subscribers.add(res);
+        sendSseEvent(res, 'connected', { buildingId });
+
+        const keepAlive = setInterval(() => {
+            res.write(': keep-alive\n\n');
+        }, 25000);
+
+        req.on('close', () => {
+            clearInterval(keepAlive);
+            subscribers.delete(res);
+            if (subscribers.size === 0) {
+                roomDrawStatusSubscribers.delete(buildingId);
+            }
+        });
+    }
+);
+
+/**
  * @route   PATCH /api/campus/housing/room-draw/rooms/:roomId
  * @desc    Mark a room taken or not taken during room draw
  * @access  isAuthenticated
@@ -1144,6 +1351,12 @@ router.patch(
                 requestedStatus === 'available'
             ) {
                 await RoomDrawStatuses.deleteOne({ housing_room_id: roomId });
+                broadcastRoomDrawStatusEvent({
+                    buildingId: room.housing_building_id,
+                    roomId,
+                    status: 'not_taken',
+                    updatedAt: new Date(),
+                });
                 res.json({
                     roomId,
                     status: 'not_taken',
@@ -1219,6 +1432,13 @@ router.patch(
                 return;
             }
 
+            broadcastRoomDrawStatusEvent({
+                buildingId: room.housing_building_id,
+                roomId,
+                status: 'taken',
+                updatedAt: updatedStatus.updatedAt,
+            });
+
             res.json({
                 roomId,
                 status: updatedStatus.status,
@@ -1244,6 +1464,43 @@ router.patch(
  * @desc    Get the signed-in user's ranked room preferences
  * @access  isAuthenticated
  */
+router.get(
+    '/room-preferences/events',
+    isAuthenticated,
+    (req: Request, res: Response) => {
+        const userId = getSessionUserId(req);
+        if (!userId) {
+            res.status(401).json({ message: 'Authentication required' });
+            return;
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders?.();
+
+        if (!userPreferenceSubscribers.has(userId)) {
+            userPreferenceSubscribers.set(userId, new Set());
+        }
+
+        const subscribers = userPreferenceSubscribers.get(userId)!;
+        subscribers.add(res);
+        sendSseEvent(res, 'connected', {});
+
+        const keepAlive = setInterval(() => {
+            res.write(': keep-alive\n\n');
+        }, 25000);
+
+        req.on('close', () => {
+            clearInterval(keepAlive);
+            subscribers.delete(res);
+            if (subscribers.size === 0) {
+                userPreferenceSubscribers.delete(userId);
+            }
+        });
+    }
+);
+
 router.get(
     '/room-preferences',
     isAuthenticated,
@@ -1406,6 +1663,10 @@ router.put(
                 return;
             }
 
+            const previousActivePreferences = await RoomPreferences.find({
+                user_id: userId,
+                $or: [{ status: 'active' }, { status: { $exists: false } }],
+            }).lean();
             const activePreferences = await RoomPreferences.find({
                 user_id: userId,
                 housing_room_id: { $in: [...uniqueRoomIds] },
@@ -1455,6 +1716,17 @@ router.put(
                 )
             );
 
+            const changedRoomIds = [
+                ...previousActivePreferences.map(
+                    (preference) => preference.housing_room_id
+                ),
+                ...normalizedItems.map((item) => item.housing_room_id),
+            ];
+            broadcastRoomPreferenceEvent(
+                await getBuildingIdsForRoomIds(changedRoomIds)
+            );
+            broadcastUserPreferenceEvent([userId]);
+
             res.json({ message: 'Room preferences saved' });
         } catch (error) {
             res.status(500).json({ message: 'Server error' });
@@ -1503,6 +1775,7 @@ router.post(
 
             const room = (await HousingRooms.findOne({ id: roomId }).lean()) as {
                 eligibleYear?: number | null;
+                housing_building_id: number;
             } | null;
             if (!room) {
                 res.status(404).json({ message: 'Room not found' });
@@ -1666,6 +1939,16 @@ router.post(
                 await session.endSession();
             }
 
+            broadcastRoomPreferenceEvent([room.housing_building_id]);
+            broadcastUserPreferenceEvent(
+                [
+                    userId,
+                    bumpedPreference
+                        ? (bumpedPreference as { user_id: string }).user_id
+                        : null,
+                ].filter((id): id is string => Boolean(id))
+            );
+
             res.status(alreadyInPreferences ? 200 : 201).json({
                 message: bumpedPreference
                     ? 'Room added to preferences and previous rank owner was bumped'
@@ -1719,6 +2002,9 @@ router.delete(
                 return;
             }
 
+            const removedRoom = (await HousingRooms.findOne({ id: roomId })
+                .select('housing_building_id')
+                .lean()) as { housing_building_id: number } | null;
             await RoomPreferences.deleteOne({
                 user_id: userId,
                 housing_room_id: roomId,
@@ -1736,6 +2022,19 @@ router.delete(
                     return preference.save();
                 })
             );
+
+            const changedRoomIds = [
+                roomId,
+                ...remainingPreferences.map(
+                    (preference) => preference.housing_room_id
+                ),
+            ];
+            const buildingIds = await getBuildingIdsForRoomIds(changedRoomIds);
+            if (removedRoom) {
+                buildingIds.push(removedRoom.housing_building_id);
+            }
+            broadcastRoomPreferenceEvent(buildingIds);
+            broadcastUserPreferenceEvent([userId]);
 
             res.json({ message: 'Room removed from preferences' });
         } catch (error) {
@@ -1814,6 +2113,44 @@ router.get(
  * @desc    Get active ranked room holders for a building
  * @access  isAuthenticated
  */
+router.get(
+    '/:building/room-preferences/events',
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+        const buildingId = parseInt(getParam(req.params.building), 10);
+
+        if (isNaN(buildingId)) {
+            res.status(400).json({ message: 'Invalid building ID format' });
+            return;
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders?.();
+
+        if (!roomPreferenceSubscribers.has(buildingId)) {
+            roomPreferenceSubscribers.set(buildingId, new Set());
+        }
+
+        const subscribers = roomPreferenceSubscribers.get(buildingId)!;
+        subscribers.add(res);
+        sendSseEvent(res, 'connected', { buildingId });
+
+        const keepAlive = setInterval(() => {
+            res.write(': keep-alive\n\n');
+        }, 25000);
+
+        req.on('close', () => {
+            clearInterval(keepAlive);
+            subscribers.delete(res);
+            if (subscribers.size === 0) {
+                roomPreferenceSubscribers.delete(buildingId);
+            }
+        });
+    }
+);
+
 router.get(
     '/:building/room-preferences/holders',
     isAuthenticated,
