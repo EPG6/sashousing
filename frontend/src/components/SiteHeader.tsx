@@ -7,22 +7,46 @@ import { renderGoogleSignInButton } from '@/utils/googleSignIn';
 import { signOut } from 'firebase/auth';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 const navLinks = [
-    { href: '/campus/housing', label: 'Rooms', shortLabel: 'Rooms' },
+    {
+        href: '/campus/housing',
+        label: 'Rooms',
+        shortLabel: 'Rooms',
+        rememberLastRoomsPath: true,
+    },
     {
         href: '/campus/housing/process',
         label: 'Housing Process',
         shortLabel: 'Process',
+        rememberLastRoomsPath: false,
     },
     {
         href: '/campus/housing/accommodation',
         label: 'Accommodation',
         shortLabel: 'Accommodation',
+        rememberLastRoomsPath: false,
     },
 ] as const;
+
+const LAST_ROOMS_PATH_KEY = 'sas:lastRoomsPath';
+const ROOMS_HOME_PATH = '/campus/housing';
+const nonRoomHousingPaths = new Set([
+    '/campus/housing/process',
+    '/campus/housing/accommodation',
+    '/campus/housing/preferences',
+]);
+
+const isRoomBrowsingPath = (pathname: string) =>
+    pathname === ROOMS_HOME_PATH ||
+    (pathname.startsWith(`${ROOMS_HOME_PATH}/`) &&
+        !Array.from(nonRoomHousingPaths).some(
+            (nonRoomPath) =>
+                pathname === nonRoomPath ||
+                pathname.startsWith(`${nonRoomPath}/`)
+        ));
 
 type SiteHeaderProps = {
     onNavigate?: (href: string) => void;
@@ -30,38 +54,28 @@ type SiteHeaderProps = {
 
 export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
     const pathname = usePathname();
-    const { user, loading } = useAuth();
-    const [loggingOut, setLoggingOut] = useState(false);
-    const googleButtonRef = useRef<HTMLDivElement>(null);
+    const searchParams = useSearchParams();
+    const [lastRoomsHref, setLastRoomsHref] = useState(ROOMS_HOME_PATH);
+    const currentHref = useMemo(() => {
+        const queryString = searchParams.toString();
+        return queryString ? `${pathname}?${queryString}` : pathname;
+    }, [pathname, searchParams]);
 
     useEffect(() => {
-        if (loading || user || !googleButtonRef.current) return;
-
-        renderGoogleSignInButton(
-            googleButtonRef.current,
-            () => window.location.reload(),
-            (error) => console.error('Login failed:', error)
-        );
-    }, [loading, user]);
-
-    const logout = async () => {
-        setLoggingOut(true);
-
-        try {
-            await signOut(getFirebaseAuth());
-
-            await fetch(`${backendUrl}/api/auth/logout`, {
-                method: 'POST',
-                credentials: 'include',
-            });
-
-            window.location.href = '/campus/housing';
-        } catch (error) {
-            console.error('Logout failed:', error);
-        } finally {
-            setLoggingOut(false);
+        const savedHref = window.localStorage.getItem(LAST_ROOMS_PATH_KEY);
+        if (savedHref) {
+            setLastRoomsHref(savedHref);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        if (!isRoomBrowsingPath(pathname)) {
+            return;
+        }
+
+        window.localStorage.setItem(LAST_ROOMS_PATH_KEY, currentHref);
+        setLastRoomsHref(currentHref);
+    }, [currentHref, pathname]);
 
     const handleNavigation = (
         event: React.MouseEvent<HTMLAnchorElement>,
@@ -103,45 +117,7 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
                             Scripps Associated Students
                         </span>
 
-                        {!loading && user?.isAdmin && (
-                            <Link
-                                href="/admin/housing-data"
-                                onClick={(event) =>
-                                    handleNavigation(
-                                        event,
-                                        '/admin/housing-data'
-                                    )
-                                }
-                                className="rounded-md border border-sas-line px-3 py-2 text-sm font-medium text-sas-black hover:border-sas-green hover:text-sas-green"
-                            >
-                                Dashboard
-                            </Link>
-                        )}
-
-                        {!loading &&
-                            (user ? (
-                                <button
-                                    type="button"
-                                    onClick={logout}
-                                    disabled={loggingOut}
-                                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
-                                >
-                                    {loggingOut ? (
-                                        '...'
-                                    ) : (
-                                        <>
-                                            <span className="sm:hidden">
-                                                Out
-                                            </span>
-                                            <span className="hidden sm:inline">
-                                                Sign out
-                                            </span>
-                                        </>
-                                    )}
-                                </button>
-                            ) : (
-                                <div ref={googleButtonRef} />
-                            ))}
+                        <SiteHeaderAuthControls onNavigate={onNavigate} />
                     </div>
                 </div>
 
@@ -150,6 +126,9 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
                     className="mt-3 flex flex-wrap gap-2 border-t border-sas-line pt-3"
                 >
                     {navLinks.map((link) => {
+                        const href = link.rememberLastRoomsPath
+                            ? lastRoomsHref
+                            : link.href;
                         const isActive =
                             pathname === link.href ||
                             (link.href !== '/campus/housing' &&
@@ -158,9 +137,9 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
                         return (
                             <Link
                                 key={link.href}
-                                href={link.href}
+                                href={href}
                                 onClick={(event) =>
-                                    handleNavigation(event, link.href)
+                                    handleNavigation(event, href)
                                 }
                                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-smooth ${
                                     isActive
@@ -182,3 +161,89 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
         </header>
     );
 }
+
+const SiteHeaderAuthControls = memo(function SiteHeaderAuthControls({
+    onNavigate,
+}: SiteHeaderProps) {
+    const { user, loading } = useAuth();
+    const [loggingOut, setLoggingOut] = useState(false);
+    const googleButtonRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (loading || user || !googleButtonRef.current) return;
+
+        renderGoogleSignInButton(
+            googleButtonRef.current,
+            () => window.location.reload(),
+            (error) => console.error('Login failed:', error)
+        );
+    }, [loading, user]);
+
+    const logout = async () => {
+        setLoggingOut(true);
+
+        try {
+            await signOut(getFirebaseAuth());
+
+            await fetch(`${backendUrl}/api/auth/logout`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+
+            window.location.href = ROOMS_HOME_PATH;
+        } catch (error) {
+            console.error('Logout failed:', error);
+        } finally {
+            setLoggingOut(false);
+        }
+    };
+
+    const handleNavigation = (
+        event: React.MouseEvent<HTMLAnchorElement>,
+        href: string
+    ) => {
+        if (!onNavigate) return;
+
+        event.preventDefault();
+        onNavigate(href);
+    };
+
+    return (
+        <>
+            {!loading && user?.isAdmin && (
+                <Link
+                    href="/admin/housing-data"
+                    onClick={(event) =>
+                        handleNavigation(event, '/admin/housing-data')
+                    }
+                    className="rounded-md border border-sas-line px-3 py-2 text-sm font-medium text-sas-black hover:border-sas-green hover:text-sas-green"
+                >
+                    Dashboard
+                </Link>
+            )}
+
+            {!loading &&
+                (user ? (
+                    <button
+                        type="button"
+                        onClick={logout}
+                        disabled={loggingOut}
+                        className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                    >
+                        {loggingOut ? (
+                            '...'
+                        ) : (
+                            <>
+                                <span className="sm:hidden">Out</span>
+                                <span className="hidden sm:inline">
+                                    Sign out
+                                </span>
+                            </>
+                        )}
+                    </button>
+                ) : (
+                    <div ref={googleButtonRef} />
+                ))}
+        </>
+    );
+});
