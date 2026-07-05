@@ -393,16 +393,6 @@ const RoomRatingSummary = memo(function RoomRatingSummary({
 }: {
     room: RoomCardProps['room'];
 }) {
-    const user = useCurrentUser();
-
-    if (!user) {
-        return (
-            <p className="mb-4 text-sm text-sas-black/55">
-                Sign in to view reviews and ratings.
-            </p>
-        );
-    }
-
     return (
         <div className="mb-4 flex items-center">
             <span className="mr-2 text-sas-black/65">Rating:</span>
@@ -426,7 +416,6 @@ const RoomReviewButton = memo(function RoomReviewButton({
     reviewHref: string;
 }) {
     const router = useRouter();
-    const user = useCurrentUser();
 
     const prefetchReviewPage = () => {
         router.prefetch(reviewHref);
@@ -440,7 +429,7 @@ const RoomReviewButton = memo(function RoomReviewButton({
             onFocus={prefetchReviewPage}
         >
             <button className="rounded-md border border-sas-green px-6 py-2 font-medium text-sas-green transition-colors hover:bg-sas-green hover:text-sas-white">
-                {user ? 'View Reviews' : 'Sign in to View Reviews'}
+                View Reviews
             </button>
         </Link>
     );

@@ -8,6 +8,13 @@ const usesSecureFrontend =
     process.env.RENDER === 'true' ||
     Boolean(process.env.RENDER_SERVICE_ID) ||
     (process.env.FRONTEND_URL || '').includes('https://');
+const sessionHintCookieName = 'sas_has_session';
+const sessionHintCookieOptions = {
+    secure: usesSecureFrontend,
+    sameSite: usesSecureFrontend ? 'none' : 'lax',
+    httpOnly: false,
+    maxAge: 24 * 60 * 60 * 1000,
+} as const;
 
 router.get('/current_user', (req: Request, res: Response) => {
     if (!req.session.user) {
@@ -69,6 +76,7 @@ router.post('/login', async (req: Request, res: Response) => {
             isAdmin: user.isAdmin,
         };
 
+        res.cookie(sessionHintCookieName, 'true', sessionHintCookieOptions);
         res.status(200).json({ user: req.session.user });
     } catch (error) {
         console.error('Firebase login error:', error);
@@ -87,6 +95,11 @@ router.post('/logout', (req: Request, res: Response) => {
             secure: usesSecureFrontend,
             sameSite: usesSecureFrontend ? 'none' : 'lax',
             httpOnly: true,
+        });
+        res.clearCookie(sessionHintCookieName, {
+            secure: usesSecureFrontend,
+            sameSite: usesSecureFrontend ? 'none' : 'lax',
+            httpOnly: false,
         });
         res.status(204).send();
     });

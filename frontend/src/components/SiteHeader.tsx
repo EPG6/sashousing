@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/hooks/useAuth';
+import { setSessionHint, useCurrentUser } from '@/hooks/useAuth';
 import { backendUrl } from '@/utils/api';
 import { getFirebaseAuth } from '@/utils/firebase';
 import { renderGoogleSignInButton } from '@/utils/googleSignIn';
@@ -161,7 +161,7 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
 const SiteHeaderAuthControls = memo(function SiteHeaderAuthControls({
     onNavigate,
 }: SiteHeaderProps) {
-    const { user } = useAuth();
+    const user = useCurrentUser();
     const [loggingOut, setLoggingOut] = useState(false);
     const googleButtonRef = useRef<HTMLDivElement>(null);
 
@@ -179,6 +179,7 @@ const SiteHeaderAuthControls = memo(function SiteHeaderAuthControls({
         setLoggingOut(true);
 
         try {
+            setSessionHint(false);
             await signOut(getFirebaseAuth());
 
             await fetch(`${backendUrl}/api/auth/logout`, {

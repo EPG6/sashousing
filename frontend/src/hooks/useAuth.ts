@@ -9,6 +9,9 @@ type AuthState = {
     loading: boolean;
 };
 
+const SESSION_HINT_KEY = 'sas:hasSession';
+const SESSION_HINT_COOKIE = 'sas_has_session=true';
+
 let authState: AuthState = {
     user: null,
     loading: true,
@@ -20,6 +23,32 @@ const notifySubscribers = () => {
     subscribers.forEach((subscriber) => subscriber(authState));
 };
 
+export const hasSessionHint = () => {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+
+    return (
+        window.localStorage.getItem(SESSION_HINT_KEY) === 'true' ||
+        document.cookie.includes(SESSION_HINT_COOKIE)
+    );
+};
+
+export const setSessionHint = (hasSession: boolean) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (hasSession) {
+        window.localStorage.setItem(SESSION_HINT_KEY, 'true');
+        document.cookie = 'sas_has_session=true; path=/; max-age=86400; SameSite=Lax';
+        return;
+    }
+
+    window.localStorage.removeItem(SESSION_HINT_KEY);
+    document.cookie = 'sas_has_session=; path=/; max-age=0; SameSite=Lax';
+};
+
 const loadAuth = () => {
     if (authPromise) {
         return authPromise;
@@ -29,6 +58,13 @@ const loadAuth = () => {
         credentials: 'include',
     })
         .then(async (response) => {
+            if (!response.ok) {
+                setSessionHint(false);
+            }
+            if (response.ok) {
+                setSessionHint(true);
+            }
+
             authState = {
                 user: response.ok ? (await response.json()).user : null,
                 loading: false,
@@ -40,6 +76,7 @@ const loadAuth = () => {
                 user: null,
                 loading: false,
             };
+            setSessionHint(false);
         })
         .finally(() => {
             notifySubscribers();
@@ -78,7 +115,9 @@ export function useCurrentUser() {
         setUser((currentUser) =>
             currentUser === authState.user ? currentUser : authState.user
         );
-        void loadAuth();
+        if (hasSessionHint()) {
+            void loadAuth();
+        }
 
         return () => {
             subscribers.delete(subscriber);
