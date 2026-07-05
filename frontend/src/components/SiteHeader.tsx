@@ -7,8 +7,8 @@ import { renderGoogleSignInButton } from '@/utils/googleSignIn';
 import { signOut } from 'firebase/auth';
 import Image from 'next/image';
 import Link from 'next/link';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { memo, useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 const navLinks = [
     {
@@ -54,12 +54,7 @@ type SiteHeaderProps = {
 
 export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
     const pathname = usePathname();
-    const searchParams = useSearchParams();
     const [lastRoomsHref, setLastRoomsHref] = useState(ROOMS_HOME_PATH);
-    const currentHref = useMemo(() => {
-        const queryString = searchParams.toString();
-        return queryString ? `${pathname}?${queryString}` : pathname;
-    }, [pathname, searchParams]);
 
     useEffect(() => {
         const savedHref = window.localStorage.getItem(LAST_ROOMS_PATH_KEY);
@@ -73,9 +68,10 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
             return;
         }
 
+        const currentHref = `${pathname}${window.location.search}`;
         window.localStorage.setItem(LAST_ROOMS_PATH_KEY, currentHref);
         setLastRoomsHref(currentHref);
-    }, [currentHref, pathname]);
+    }, [pathname]);
 
     const handleNavigation = (
         event: React.MouseEvent<HTMLAnchorElement>,
