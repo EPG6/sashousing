@@ -1,6 +1,5 @@
 'use client';
 import React from 'react';
-import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ReviewFormProps } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,10 +9,12 @@ import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 
 type RatingCategory = 'overall' | 'quiet' | 'layout' | 'temperature';
 
-export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
+export const ReviewForm: React.FC<ReviewFormProps> = ({
+    review,
+    buildingId,
+    roomNumber,
+}) => {
     const { user } = useAuth();
-    const params = useParams();
-    const { id, room } = params;
 
     const [ratings, setRatings] = useState({
         overall: 0,
@@ -177,7 +178,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
 
             const url = review
                 ? `${backendUrl}/api/campus/housing/reviews/${review.id}`
-                : `${backendUrl}/api/campus/housing/${id}/${room}/reviews`;
+                : `${backendUrl}/api/campus/housing/${buildingId}/${encodeURIComponent(roomNumber)}/reviews`;
 
             const method = review ? 'PATCH' : 'POST';
 

@@ -58,6 +58,9 @@ export default function DynamicRooms() {
     const [buildingNotFound, setBuildingNotFound] = useState(false);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [building, setBuilding] = useState<Building | null>(null);
+    const [resolvedBuildingId, setResolvedBuildingId] = useState<number | null>(
+        null
+    );
     const [roomDrawVisible, setRoomDrawVisible] = useState(false);
     const [roomDrawRequiresPriority, setRoomDrawRequiresPriority] =
         useState(false);
@@ -109,6 +112,7 @@ export default function DynamicRooms() {
 
                     buildingId = matchingBuilding.id;
                 }
+                setResolvedBuildingId(buildingId);
 
                 const requests = [
                     fetch(`${backendUrl}/api/campus/housing/${buildingId}`, {
@@ -338,18 +342,21 @@ export default function DynamicRooms() {
             const data = await response.json();
             setRoomDrawRequiresPriority(false);
 
-            const buildingId = Number(id);
+            if (resolvedBuildingId === null) {
+                throw new Error('Building is not loaded');
+            }
+
             const [statusesResponse, preferencesResponse, holdersResponse] =
                 await Promise.all([
                     fetch(
-                        `${backendUrl}/api/campus/housing/${buildingId}/room-draw/statuses`,
+                        `${backendUrl}/api/campus/housing/${resolvedBuildingId}/room-draw/statuses`,
                         { credentials: 'include' }
                     ),
                     fetch(`${backendUrl}/api/campus/housing/room-preferences`, {
                         credentials: 'include',
                     }),
                     fetch(
-                        `${backendUrl}/api/campus/housing/${buildingId}/room-preferences/holders`,
+                        `${backendUrl}/api/campus/housing/${resolvedBuildingId}/room-preferences/holders`,
                         { credentials: 'include' }
                     ),
                 ]);
@@ -395,13 +402,16 @@ export default function DynamicRooms() {
     };
 
     const refreshRoomPreferences = async () => {
-        const buildingId = Number(id);
+        if (resolvedBuildingId === null) {
+            return;
+        }
+
         const [preferencesResponse, holdersResponse] = await Promise.all([
             fetch(`${backendUrl}/api/campus/housing/room-preferences`, {
                 credentials: 'include',
             }),
             fetch(
-                `${backendUrl}/api/campus/housing/${buildingId}/room-preferences/holders`,
+                `${backendUrl}/api/campus/housing/${resolvedBuildingId}/room-preferences/holders`,
                 { credentials: 'include' }
             ),
         ]);

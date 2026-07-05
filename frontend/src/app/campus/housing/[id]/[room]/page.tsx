@@ -27,6 +27,8 @@ const RoomPage = () => {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [buildingName, setBuildingName] = useState<string>('');
+    const [buildingId, setBuildingId] = useState<number | null>(null);
+    const [roomNumber, setRoomNumber] = useState<string>('');
     const [roomReviews, setRoomReviews] = useState<RoomWithReviews | null>(
         null
     );
@@ -84,6 +86,9 @@ const RoomPage = () => {
 
                     buildingId = matchingBuilding.id;
                 }
+
+                setBuildingId(buildingId);
+                setRoomNumber(roomParam || '');
 
                 const [buildingResponse, reviewsResponse] = await Promise.all([
                     fetch(
@@ -284,9 +289,15 @@ const RoomPage = () => {
                         </button>
                     </div>
 
-                    {(isCreatingNew || selectedReview) && (
+                    {(isCreatingNew || selectedReview) &&
+                        buildingId !== null &&
+                        roomNumber && (
                         <div className="mb-8">
-                            <ReviewForm review={selectedReview} />
+                            <ReviewForm
+                                review={selectedReview}
+                                buildingId={buildingId}
+                                roomNumber={roomNumber}
+                            />
                         </div>
                     )}
 
