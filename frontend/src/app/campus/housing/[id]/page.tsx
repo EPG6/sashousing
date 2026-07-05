@@ -3,7 +3,7 @@
 import Skeleton, { RoomCardSkeleton } from '@/components/Skeleton';
 import SiteHeader from '@/components/SiteHeader';
 import { RoomCard, getRoomOccupancyType } from '@/components/housing/Rooms';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/hooks/useAuth';
 import {
     Building,
     Room,
@@ -1079,7 +1079,7 @@ function RoomDrawPriorityForm({
     onPriorityFormChange,
     onSubmit,
 }: RoomDrawPriorityFormProps) {
-    const { user } = useAuth();
+    const user = useCurrentUser();
 
     if (!isVisible || !requiresPriority || !user) {
         return null;
@@ -1154,7 +1154,7 @@ function RoomDrawRankingLink({
     roomDrawRequiresPriority: boolean;
 }) {
     const router = useRouter();
-    const { user } = useAuth();
+    const user = useCurrentUser();
 
     useEffect(() => {
         if (user && roomDrawVisible && !roomDrawRequiresPriority) {
@@ -1210,11 +1210,10 @@ function AuthenticatedRoomGrid({
     onRefreshRoomDrawStatuses,
     onRefreshRoomPreferences,
 }: AuthenticatedRoomGridProps) {
-    const { user, loading: authLoading } = useAuth();
+    const user = useCurrentUser();
 
     useEffect(() => {
         if (
-            authLoading ||
             !user ||
             !roomDrawVisible ||
             roomDrawRequiresPriority
@@ -1225,7 +1224,6 @@ function AuthenticatedRoomGrid({
         void onRefreshRoomDrawStatuses();
         void onRefreshRoomPreferences();
     }, [
-        authLoading,
         onRefreshRoomDrawStatuses,
         onRefreshRoomPreferences,
         roomDrawRequiresPriority,
