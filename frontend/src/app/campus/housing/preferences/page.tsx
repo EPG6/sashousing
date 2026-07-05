@@ -404,6 +404,11 @@ export default function RoomPreferencesPage() {
         setMessage(null);
         setError(null);
         const activePreferences = getActivePreferences(preferences);
+        const previousSavedPreferences = savedPreferences;
+        const optimisticSavedPreferences = preferences;
+        setSavedPreferences(optimisticSavedPreferences);
+        setEditingRanking(false);
+        setMessage('Room ranking saved.');
 
         try {
             const response = await fetch(
@@ -432,11 +437,11 @@ export default function RoomPreferencesPage() {
                 );
             }
 
-            setSavedPreferences(preferences);
-            setEditingRanking(false);
-            setMessage('Room ranking saved.');
+            await loadPreferences();
         } catch (error) {
             console.error('Room preference save error:', error);
+            setSavedPreferences(previousSavedPreferences);
+            setEditingRanking(true);
             setError(
                 getUserSafeMessage(
                     error instanceof Error ? error.message : null,

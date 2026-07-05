@@ -697,6 +697,26 @@ export default function HousingDataAdminPage() {
         setSavingBuilding(true);
         setMessage(null);
         setError(null);
+        let previousBuildings: BuildingSearchDoc[] = [];
+        setBuildings((currentBuildings) => {
+            previousBuildings = currentBuildings;
+            return currentBuildings.map((building) =>
+                building.id === selectedBuildingId
+                    ? {
+                          ...building,
+                          name: buildingForm.name,
+                          campus: buildingForm.campus,
+                          floors: Number(buildingForm.floors) || building.floors,
+                          eligibleYear: buildingForm.eligibleYear
+                              ? Number(buildingForm.eligibleYear)
+                              : null,
+                          description: buildingForm.description,
+                      }
+                    : building
+            );
+        });
+        setEditingBuilding(false);
+        setMessage('Building saved.');
 
         try {
             const response = await fetch(
@@ -737,10 +757,10 @@ export default function HousingDataAdminPage() {
                         : building
                 )
             );
-            setMessage('Building saved.');
-            setEditingBuilding(false);
         } catch (error) {
             console.error('Building save error:', error);
+            setBuildings(previousBuildings);
+            setEditingBuilding(true);
             setError(
                 getUserSafeMessage(
                     error instanceof Error ? error.message : null,
@@ -764,6 +784,20 @@ export default function HousingDataAdminPage() {
         setDeletingBuilding(true);
         setMessage(null);
         setError(null);
+        const deletedBuildingName = pendingDeleteBuilding?.name || 'Building';
+        const previousBuildings = buildings;
+        const previousSelectedBuildingId = selectedBuildingId;
+        const previousRooms = rooms;
+        const nextBuildings = buildings.filter(
+            (building) => building.id !== pendingDeleteBuildingId
+        );
+        setBuildings(nextBuildings);
+        setSelectedBuildingId(nextBuildings[0]?.id || null);
+        setRooms([]);
+        setEditingBuilding(false);
+        setEditingRoomId(null);
+        setPendingDeleteBuildingId(null);
+        setMessage(`${deletedBuildingName} deleted.`);
 
         try {
             const response = await fetch(
@@ -782,23 +816,11 @@ export default function HousingDataAdminPage() {
                     )
                 );
             }
-
-            const deletedBuildingName =
-                pendingDeleteBuilding?.name || 'Building';
-            setBuildings((currentBuildings) => {
-                const nextBuildings = currentBuildings.filter(
-                    (building) => building.id !== pendingDeleteBuildingId
-                );
-                setSelectedBuildingId(nextBuildings[0]?.id || null);
-                return nextBuildings;
-            });
-            setRooms([]);
-            setEditingBuilding(false);
-            setEditingRoomId(null);
-            setPendingDeleteBuildingId(null);
-            setMessage(`${deletedBuildingName} deleted.`);
         } catch (error) {
             console.error('Building delete error:', error);
+            setBuildings(previousBuildings);
+            setSelectedBuildingId(previousSelectedBuildingId);
+            setRooms(previousRooms);
             setError(
                 getUserSafeMessage(
                     error instanceof Error ? error.message : null,
@@ -814,6 +836,62 @@ export default function HousingDataAdminPage() {
         setSavingRoomId(roomId);
         setMessage(null);
         setError(null);
+        let previousRooms: Room[] = [];
+        const optimisticRoomNumber = roomForm.room_number;
+        setRooms((currentRooms) => {
+            previousRooms = currentRooms;
+            return currentRooms.map((room) =>
+                room.id === roomId
+                    ? {
+                          ...room,
+                          room_number: roomForm.room_number,
+                          housing_building_id:
+                              Number(roomForm.housing_building_id) ||
+                              room.housing_building_id,
+                          size: roomForm.size ? Number(roomForm.size) : undefined,
+                          occupancy_type: roomForm.occupancy_type
+                              ? Number(roomForm.occupancy_type)
+                              : undefined,
+                          closet_type: roomForm.closet_type
+                              ? Number(roomForm.closet_type)
+                              : undefined,
+                          bathroom_type: roomForm.bathroom_type
+                              ? Number(roomForm.bathroom_type)
+                              : undefined,
+                          floor: roomForm.floor
+                              ? Number(roomForm.floor)
+                              : undefined,
+                          eligibleYear: roomForm.eligibleYear
+                              ? Number(roomForm.eligibleYear)
+                              : undefined,
+                          sink: roomForm.sink
+                              ? roomForm.sink === 'true' ||
+                                roomForm.sink.toLowerCase() === 'yes'
+                              : undefined,
+                          closet: roomForm.closet
+                              ? roomForm.closet === 'true' ||
+                                roomForm.closet.toLowerCase() === 'yes'
+                              : undefined,
+                          closetType: roomForm.closetType || undefined,
+                          balcony: roomForm.balcony
+                              ? roomForm.balcony === 'true' ||
+                                roomForm.balcony.toLowerCase() === 'yes'
+                              : undefined,
+                          privateBath: roomForm.privateBath
+                              ? roomForm.privateBath === 'true' ||
+                                roomForm.privateBath.toLowerCase() === 'yes'
+                              : undefined,
+                          suiteBath: roomForm.suiteBath
+                              ? roomForm.suiteBath === 'true' ||
+                                roomForm.suiteBath.toLowerCase() === 'yes'
+                              : undefined,
+                          note: roomForm.note || undefined,
+                      }
+                    : room
+            );
+        });
+        setEditingRoomId(null);
+        setMessage(`Room ${optimisticRoomNumber} saved.`);
 
         try {
             const response = await fetch(
@@ -838,10 +916,10 @@ export default function HousingDataAdminPage() {
             setRooms((currentRooms) =>
                 currentRooms.map((room) => (room.id === data.id ? data : room))
             );
-            setMessage(`Room ${data.room_number} saved.`);
-            setEditingRoomId(null);
         } catch (error) {
             console.error('Room save error:', error);
+            setRooms(previousRooms);
+            setEditingRoomId(roomId);
             setError(
                 getUserSafeMessage(
                     error instanceof Error ? error.message : null,
@@ -865,6 +943,31 @@ export default function HousingDataAdminPage() {
         setDeletingRoomId(pendingDeleteRoomId);
         setMessage(null);
         setError(null);
+        const deletedRoomNumber = pendingDeleteRoom?.room_number || '';
+        const previousRooms = rooms;
+        const previousBuildings = buildings;
+        setRooms((currentRooms) =>
+            currentRooms.filter((room) => room.id !== pendingDeleteRoomId)
+        );
+        setBuildings((currentBuildings) =>
+            currentBuildings.map((building) =>
+                building.id === selectedBuildingId
+                    ? {
+                          ...building,
+                          roomNumbers: building.roomNumbers.filter(
+                              (roomNumber) => roomNumber !== deletedRoomNumber
+                          ),
+                      }
+                    : building
+            )
+        );
+        setEditingRoomId(null);
+        setPendingDeleteRoomId(null);
+        setMessage(
+            deletedRoomNumber
+                ? `Room ${deletedRoomNumber} deleted.`
+                : 'Room deleted.'
+        );
 
         try {
             const response = await fetch(
@@ -880,35 +983,10 @@ export default function HousingDataAdminPage() {
                     await getApiErrorMessage(response, 'Failed to delete room')
                 );
             }
-
-            const deletedRoomNumber =
-                pendingDeleteRoom?.room_number || '';
-
-            setRooms((currentRooms) =>
-                currentRooms.filter((room) => room.id !== pendingDeleteRoomId)
-            );
-            setBuildings((currentBuildings) =>
-                currentBuildings.map((building) =>
-                    building.id === selectedBuildingId
-                        ? {
-                              ...building,
-                              roomNumbers: building.roomNumbers.filter(
-                                  (roomNumber) =>
-                                      roomNumber !== deletedRoomNumber
-                              ),
-                          }
-                        : building
-                )
-            );
-            setEditingRoomId(null);
-            setPendingDeleteRoomId(null);
-            setMessage(
-                deletedRoomNumber
-                    ? `Room ${deletedRoomNumber} deleted.`
-                    : 'Room deleted.'
-            );
         } catch (error) {
             console.error('Room delete error:', error);
+            setRooms(previousRooms);
+            setBuildings(previousBuildings);
             setError(
                 getUserSafeMessage(
                     error instanceof Error ? error.message : null,

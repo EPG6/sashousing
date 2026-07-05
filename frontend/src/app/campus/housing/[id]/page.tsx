@@ -443,28 +443,53 @@ export default function DynamicRooms() {
         roomId: number,
         nextStatus: 'taken' | 'not_taken'
     ) => {
-        const response = await fetch(
-            `${backendUrl}/api/campus/housing/room-draw/rooms/${roomId}`,
-            {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({ status: nextStatus }),
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(
-                await getApiErrorMessage(
-                    response,
-                    'Failed to update room status'
-                )
+        let previousRooms: Room[] = [];
+        setRooms((currentRooms) => {
+            previousRooms = currentRooms;
+            return currentRooms.map((room) =>
+                room.id === roomId
+                    ? {
+                          ...room,
+                          roomDrawStatus:
+                              nextStatus === 'taken'
+                                  ? {
+                                        status: 'taken',
+                                        isOwner: true,
+                                        updatedAt: new Date().toISOString(),
+                                    }
+                                  : undefined,
+                      }
+                    : room
             );
-        }
+        });
 
-        await refreshRoomDrawStatuses();
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/room-draw/rooms/${roomId}`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ status: nextStatus }),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to update room status'
+                    )
+                );
+            }
+
+            await refreshRoomDrawStatuses();
+        } catch (error) {
+            setRooms(previousRooms);
+            throw error;
+        }
     }, [refreshRoomDrawStatuses]);
 
     const saveRoomDrawPriority = async (
@@ -723,45 +748,71 @@ export default function DynamicRooms() {
     }, []);
 
     const addRoomPreference = useCallback(async (roomId: number) => {
-        const response = await fetch(
-            `${backendUrl}/api/campus/housing/room-preferences/rooms/${roomId}`,
-            {
-                method: 'POST',
-                credentials: 'include',
-            }
-        );
+        let previousPreferenceRoomIds = new Set<number>();
+        setPreferenceRoomIds((currentIds) => {
+            previousPreferenceRoomIds = currentIds;
+            const nextIds = new Set(currentIds);
+            nextIds.add(roomId);
+            return nextIds;
+        });
 
-        if (!response.ok) {
-            throw new Error(
-                await getApiErrorMessage(
-                    response,
-                    'Failed to add room preference'
-                )
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/room-preferences/rooms/${roomId}`,
+                {
+                    method: 'POST',
+                    credentials: 'include',
+                }
             );
-        }
 
-        await refreshRoomPreferences();
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to add room preference'
+                    )
+                );
+            }
+
+            await refreshRoomPreferences();
+        } catch (error) {
+            setPreferenceRoomIds(previousPreferenceRoomIds);
+            throw error;
+        }
     }, [refreshRoomPreferences]);
 
     const removeRoomPreference = useCallback(async (roomId: number) => {
-        const response = await fetch(
-            `${backendUrl}/api/campus/housing/room-preferences/rooms/${roomId}`,
-            {
-                method: 'DELETE',
-                credentials: 'include',
-            }
-        );
+        let previousPreferenceRoomIds = new Set<number>();
+        setPreferenceRoomIds((currentIds) => {
+            previousPreferenceRoomIds = currentIds;
+            const nextIds = new Set(currentIds);
+            nextIds.delete(roomId);
+            return nextIds;
+        });
 
-        if (!response.ok) {
-            throw new Error(
-                await getApiErrorMessage(
-                    response,
-                    'Failed to remove room preference'
-                )
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/room-preferences/rooms/${roomId}`,
+                {
+                    method: 'DELETE',
+                    credentials: 'include',
+                }
             );
-        }
 
-        await refreshRoomPreferences();
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to remove room preference'
+                    )
+                );
+            }
+
+            await refreshRoomPreferences();
+        } catch (error) {
+            setPreferenceRoomIds(previousPreferenceRoomIds);
+            throw error;
+        }
     }, [refreshRoomPreferences]);
 
     const displayedRooms = useMemo(() => {
