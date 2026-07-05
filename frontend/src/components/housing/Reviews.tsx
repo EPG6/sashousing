@@ -8,6 +8,8 @@ import Image from 'next/image';
 import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 
+type RatingCategory = 'overall' | 'quiet' | 'layout' | 'temperature';
+
 export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
     const { user } = useAuth();
     const params = useParams();
@@ -27,21 +29,21 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
         temperature: number;
     }>({ overall: 0, quiet: 0, layout: 0, temperature: 0 });
 
-    const handleStarClick = (category: string, value: number) => {
+    const handleStarClick = (category: RatingCategory, value: number) => {
         setRatings((prevRatings) => ({
             ...prevRatings,
             [category]: value,
         }));
     };
 
-    const handleStarHover = (category: string, value: number) => {
+    const handleStarHover = (category: RatingCategory, value: number) => {
         setHoveredStar((prev) => ({
             ...prev,
             [category]: value,
         }));
     };
 
-    const handleStarHoverOut = (category: string) => {
+    const handleStarHoverOut = (category: RatingCategory) => {
         setHoveredStar((prev) => ({
             ...prev,
             [category]: 0,
@@ -49,7 +51,33 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
     };
 
     const baseStarClass =
-        'text-xl text-sas-line cursor-pointer transition-colors duration-300';
+        'text-2xl leading-none transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-sas-green/30';
+
+    const renderStars = (category: RatingCategory) => (
+        <div className="flex gap-1">
+            {[1, 2, 3, 4, 5].map((value) => {
+                const isSelected =
+                    ratings[category] >= value ||
+                    hoveredStar[category] >= value;
+
+                return (
+                    <button
+                        key={value}
+                        type="button"
+                        onClick={() => handleStarClick(category, value)}
+                        onMouseEnter={() => handleStarHover(category, value)}
+                        onMouseLeave={() => handleStarHoverOut(category)}
+                        className={`${baseStarClass} ${
+                            isSelected ? 'text-sas-green' : 'text-sas-line'
+                        }`}
+                        aria-label={`Set ${category} rating to ${value}`}
+                    >
+                        &#9733;
+                    </button>
+                );
+            })}
+        </div>
+    );
 
     const [comments, setComments] = useState<string>('');
     const [pictures, setPictures] = useState<FileList | null>(null);
@@ -188,26 +216,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
             {/* Overall Rating */}
             <div className="rating">
                 <label>Overall: </label>
-                <div>
-                    {[1, 2, 3, 4, 5].map((value) => (
-                        <span
-                            key={value}
-                            onClick={() => handleStarClick('overall', value)}
-                            onMouseEnter={() =>
-                                handleStarHover('overall', value)
-                            }
-                            onMouseLeave={() => handleStarHoverOut('overall')}
-                            className={`${baseStarClass} ${
-                                ratings.overall >= value ||
-                                hoveredStar.overall >= value
-                                    ? 'text-sas-green'
-                                    : ''
-                            }`}
-                        >
-                            &#9733;
-                        </span>
-                    ))}
-                </div>
+                {renderStars('overall')}
                 {formErrors.overall && (
                     <p className="text-sm text-sas-green">
                         {formErrors.overall}
@@ -218,24 +227,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
             {/* Quiet Rating */}
             <div className="rating">
                 <label>Quiet: </label>
-                <div>
-                    {[1, 2, 3, 4, 5].map((value) => (
-                        <span
-                            key={value}
-                            onClick={() => handleStarClick('quiet', value)}
-                            onMouseEnter={() => handleStarHover('quiet', value)}
-                            onMouseLeave={() => handleStarHoverOut('quiet')}
-                            className={`${baseStarClass} ${
-                                ratings.quiet >= value ||
-                                hoveredStar.quiet >= value
-                                    ? 'text-sas-green'
-                                    : ''
-                            }`}
-                        >
-                            &#9733;
-                        </span>
-                    ))}
-                </div>
+                {renderStars('quiet')}
                 {formErrors.quiet && (
                     <p className="text-sm text-sas-green">
                         {formErrors.quiet}
@@ -246,26 +238,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
             {/* Layout Rating */}
             <div className="rating">
                 <label>Layout: </label>
-                <div>
-                    {[1, 2, 3, 4, 5].map((value) => (
-                        <span
-                            key={value}
-                            onClick={() => handleStarClick('layout', value)}
-                            onMouseEnter={() =>
-                                handleStarHover('layout', value)
-                            }
-                            onMouseLeave={() => handleStarHoverOut('layout')}
-                            className={`${baseStarClass} ${
-                                ratings.layout >= value ||
-                                hoveredStar.layout >= value
-                                    ? 'text-sas-green'
-                                    : ''
-                            }`}
-                        >
-                            &#9733;
-                        </span>
-                    ))}
-                </div>
+                {renderStars('layout')}
                 {formErrors.layout && (
                     <p className="text-sm text-sas-green">
                         {formErrors.layout}
@@ -276,30 +249,7 @@ export const ReviewForm: React.FC<ReviewFormProps> = ({ review }) => {
             {/* Temperature Rating */}
             <div className="rating">
                 <label>Temperature: </label>
-                <div>
-                    {[1, 2, 3, 4, 5].map((value) => (
-                        <span
-                            key={value}
-                            onClick={() =>
-                                handleStarClick('temperature', value)
-                            }
-                            onMouseEnter={() =>
-                                handleStarHover('temperature', value)
-                            }
-                            onMouseLeave={() =>
-                                handleStarHoverOut('temperature')
-                            }
-                            className={`${baseStarClass} ${
-                                ratings.temperature >= value ||
-                                hoveredStar.temperature >= value
-                                    ? 'text-sas-green'
-                                    : ''
-                            }`}
-                        >
-                            &#9733;
-                        </span>
-                    ))}
-                </div>
+                {renderStars('temperature')}
                 {formErrors.temperature && (
                     <p className="text-sm text-sas-green">
                         {formErrors.temperature}
