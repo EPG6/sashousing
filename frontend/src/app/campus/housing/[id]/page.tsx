@@ -15,6 +15,7 @@ import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 import {
     getBuildingDisplayDescription,
+    getBuildingImagePath,
     getBuildingSlug,
 } from '@/utils/housingText';
 import Image from 'next/image';
@@ -605,7 +606,7 @@ export default function DynamicRooms() {
                     {building.name}
                 </h1>
                 <Image
-                    src="/housing/accommodation-hero.jpg"
+                    src={getBuildingImagePath(building.name)}
                     width={800}
                     height={400}
                     alt={building.name}

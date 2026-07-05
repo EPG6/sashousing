@@ -8,6 +8,9 @@ export const getBuildingSlug = (name: string) =>
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
 
+export const getBuildingImagePath = (name: string) =>
+    `/buildings/${getBuildingSlug(name)}.jpg`;
+
 export const getBuildingDisplayDescription = (building: BuildingText) => {
     const description = building.description?.trim();
     if (!description || /spreadsheet|imported/i.test(description)) {

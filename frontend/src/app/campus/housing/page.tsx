@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { RoomDrawSettings } from '@/types';
 import {
     getBuildingDisplayDescription,
+    getBuildingImagePath,
     getBuildingSlug,
 } from '@/utils/housingText';
 
@@ -38,7 +39,7 @@ type CampusGroup = {
 const BuildingImage = ({ building }: { building: BuildingCard }) => {
     return (
         <Image
-            src="/housing/accommodation-hero.jpg"
+            src={getBuildingImagePath(building.name)}
             alt={building.name}
             width={800}
             height={400}
