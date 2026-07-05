@@ -76,7 +76,6 @@ export const renderGoogleSignInButton = (
         type: 'standard',
         text: 'signin_with',
         shape: 'rectangular',
-        width: 100,
-        locale: 'en',
+        width: 100
     });
 };
