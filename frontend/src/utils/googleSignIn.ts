@@ -5,6 +5,7 @@ import {
 } from 'firebase/auth';
 import { backendUrl } from '@/utils/api';
 import { getFirebaseAuth } from '@/utils/firebase';
+import { setSessionHint } from '@/hooks/useAuth';
 
 declare global {
     interface Window {
@@ -25,9 +26,11 @@ const createBackendSession = async (result: UserCredential) => {
     });
 
     if (!response.ok) {
+        setSessionHint(false);
         throw new Error('Could not start a session');
     }
 
+    setSessionHint(true);
     return result;
 };
 
