@@ -15,6 +15,7 @@ import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 import {
     getBuildingDisplayDescription,
+    getBuildingFloorPlanPaths,
     getBuildingImagePath,
     getBuildingSlug,
 } from '@/utils/housingText';
@@ -72,6 +73,8 @@ export default function DynamicRooms() {
     const [roomSearchQuery, setRoomSearchQuery] = useState('');
     const [roomDrawStatusFilter, setRoomDrawStatusFilter] =
         useState<RoomDrawStatusFilter>('all');
+    const [showFloorPlans, setShowFloorPlans] = useState(false);
+    const [focusedFloorPlan, setFocusedFloorPlan] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchRooms = async () => {
@@ -553,6 +556,9 @@ export default function DynamicRooms() {
     const currentUserTakenRoom = user?.isAdmin
         ? null
         : rooms.find((room) => room.roomDrawStatus?.isOwner) || null;
+    const floorPlanPaths = building
+        ? getBuildingFloorPlanPaths(building.name)
+        : [];
 
     if (loading) {
         return <Loading />;
@@ -612,6 +618,45 @@ export default function DynamicRooms() {
                     alt={building.name}
                     className="mb-6 max-h-[500px] w-full rounded-md object-cover"
                 />
+                {floorPlanPaths.length > 0 && (
+                    <div className="mb-6">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setShowFloorPlans((current) => !current)
+                            }
+                            className="inline-flex rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+                        >
+                            {showFloorPlans
+                                ? 'Hide Floorplans'
+                                : 'Show Floorplans'}
+                        </button>
+                        {showFloorPlans && (
+                            <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                {floorPlanPaths.map((floorPlanPath, index) => (
+                                    <button
+                                        key={floorPlanPath}
+                                        type="button"
+                                        onClick={() =>
+                                            setFocusedFloorPlan(floorPlanPath)
+                                        }
+                                        className="focus:outline-none focus:ring-2 focus:ring-sas-green/30"
+                                    >
+                                        <Image
+                                            src={floorPlanPath}
+                                            width={1200}
+                                            height={900}
+                                            alt={`${building.name} floorplan ${
+                                                index + 1
+                                            }`}
+                                            className="w-full object-contain"
+                                        />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
                 <p className="mb-4 text-lg text-sas-black/75">
                     {getBuildingDisplayDescription(building)}
                 </p>
@@ -815,6 +860,27 @@ export default function DynamicRooms() {
                     </div>
                 )}
             </div>
+            {focusedFloorPlan && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-sas-black/80 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={() => setFocusedFloorPlan(null)}
+                >
+                    <div
+                        className="relative max-h-full w-full max-w-6xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <Image
+                            src={focusedFloorPlan}
+                            width={1600}
+                            height={1200}
+                            alt={`${building.name} focused floorplan`}
+                            className="max-h-[90vh] w-full object-contain"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
