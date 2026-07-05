@@ -1,6 +1,6 @@
 'use client';
 import { RoomCardProps } from '@/types';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/hooks/useAuth';
 import { getUserSafeMessage } from '@/utils/apiErrors';
 import { getBuildingSlug } from '@/utils/housingText';
 import Link from 'next/link';
@@ -393,7 +393,7 @@ const RoomRatingSummary = memo(function RoomRatingSummary({
 }: {
     room: RoomCardProps['room'];
 }) {
-    const { user } = useAuth();
+    const user = useCurrentUser();
 
     if (!user) {
         return (
@@ -426,7 +426,7 @@ const RoomReviewButton = memo(function RoomReviewButton({
     reviewHref: string;
 }) {
     const router = useRouter();
-    const { user } = useAuth();
+    const user = useCurrentUser();
 
     const prefetchReviewPage = () => {
         router.prefetch(reviewHref);
@@ -459,7 +459,7 @@ const RoomDrawStatusAction = memo(function RoomDrawStatusAction({
     canMarkRoomTaken: boolean;
     onChangeRoomDrawStatus: (nextStatus: 'taken' | 'not_taken') => void;
 }) {
-    const { user } = useAuth();
+    const user = useCurrentUser();
 
     if (!user) {
         return (

@@ -63,3 +63,27 @@ export function useAuth() {
 
     return state;
 }
+
+export function useCurrentUser() {
+    const [user, setUser] = useState<User | null>(authState.user);
+
+    useEffect(() => {
+        const subscriber = (state: AuthState) => {
+            setUser((currentUser) =>
+                currentUser === state.user ? currentUser : state.user
+            );
+        };
+
+        subscribers.add(subscriber);
+        setUser((currentUser) =>
+            currentUser === authState.user ? currentUser : authState.user
+        );
+        void loadAuth();
+
+        return () => {
+            subscribers.delete(subscriber);
+        };
+    }, []);
+
+    return user;
+}

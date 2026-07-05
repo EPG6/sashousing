@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BuildingCardSkeleton } from '@/components/Skeleton';
 import { backendUrl } from '@/utils/api';
 import SiteHeader from '@/components/SiteHeader';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/hooks/useAuth';
 import { RoomDrawSettings } from '@/types';
 import {
     getBuildingDisplayDescription,
@@ -51,7 +51,7 @@ const BuildingImage = ({ building }: { building: BuildingCard }) => {
 
 const HousingRankingLink = ({ roomDrawVisible }: { roomDrawVisible: boolean }) => {
     const router = useRouter();
-    const { user } = useAuth();
+    const user = useCurrentUser();
 
     useEffect(() => {
         if (user && roomDrawVisible) {

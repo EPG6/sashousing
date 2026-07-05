@@ -161,19 +161,19 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
 const SiteHeaderAuthControls = memo(function SiteHeaderAuthControls({
     onNavigate,
 }: SiteHeaderProps) {
-    const { user, loading } = useAuth();
+    const { user } = useAuth();
     const [loggingOut, setLoggingOut] = useState(false);
     const googleButtonRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (loading || user || !googleButtonRef.current) return;
+        if (user || !googleButtonRef.current) return;
 
         renderGoogleSignInButton(
             googleButtonRef.current,
             () => window.location.reload(),
             (error) => console.error('Login failed:', error)
         );
-    }, [loading, user]);
+    }, [user]);
 
     const logout = async () => {
         setLoggingOut(true);
@@ -206,7 +206,7 @@ const SiteHeaderAuthControls = memo(function SiteHeaderAuthControls({
 
     return (
         <>
-            {!loading && user?.isAdmin && (
+            {user?.isAdmin && (
                 <Link
                     href="/admin/housing-data"
                     onClick={(event) =>
@@ -218,28 +218,27 @@ const SiteHeaderAuthControls = memo(function SiteHeaderAuthControls({
                 </Link>
             )}
 
-            {!loading &&
-                (user ? (
-                    <button
-                        type="button"
-                        onClick={logout}
-                        disabled={loggingOut}
-                        className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
-                    >
-                        {loggingOut ? (
-                            '...'
-                        ) : (
-                            <>
-                                <span className="sm:hidden">Out</span>
-                                <span className="hidden sm:inline">
-                                    Sign out
-                                </span>
-                            </>
-                        )}
-                    </button>
-                ) : (
-                    <div ref={googleButtonRef} />
-                ))}
+            {user ? (
+                <button
+                    type="button"
+                    onClick={logout}
+                    disabled={loggingOut}
+                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                >
+                    {loggingOut ? (
+                        '...'
+                    ) : (
+                        <>
+                            <span className="sm:hidden">Out</span>
+                            <span className="hidden sm:inline">
+                                Sign out
+                            </span>
+                        </>
+                    )}
+                </button>
+            ) : (
+                <div ref={googleButtonRef} />
+            )}
         </>
     );
 });
