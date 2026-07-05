@@ -4,30 +4,62 @@ import { useEffect, useState } from 'react';
 import { User } from '@/types';
 import { backendUrl } from '@/utils/api';
 
+type AuthState = {
+    user: User | null;
+    loading: boolean;
+};
+
+let authState: AuthState = {
+    user: null,
+    loading: true,
+};
+let authPromise: Promise<void> | null = null;
+const subscribers = new Set<(state: AuthState) => void>();
+
+const notifySubscribers = () => {
+    subscribers.forEach((subscriber) => subscriber(authState));
+};
+
+const loadAuth = () => {
+    if (authPromise) {
+        return authPromise;
+    }
+
+    authPromise = fetch(`${backendUrl}/api/auth/current_user`, {
+        credentials: 'include',
+    })
+        .then(async (response) => {
+            authState = {
+                user: response.ok ? (await response.json()).user : null,
+                loading: false,
+            };
+        })
+        .catch((error) => {
+            console.error('Auth check error:', error);
+            authState = {
+                user: null,
+                loading: false,
+            };
+        })
+        .finally(() => {
+            notifySubscribers();
+        });
+
+    return authPromise;
+};
+
 export function useAuth() {
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [state, setState] = useState<AuthState>(authState);
 
     useEffect(() => {
-        const checkAuth = async () => {
-            try {
-                const response = await fetch(`${backendUrl}/api/auth/current_user`, {
-                    credentials: 'include',
-                });
+        subscribers.add(setState);
+        setState(authState);
+        void loadAuth();
 
-                if (response.ok) {
-                    const data = await response.json();
-                    setUser(data.user);
-                }
-            } catch (error) {
-                console.error('Auth check error:', error);
-            } finally {
-                setLoading(false);
-            }
+        return () => {
+            subscribers.delete(setState);
         };
-
-        checkAuth();
     }, []);
 
-    return { user, loading };
+    return state;
 }
