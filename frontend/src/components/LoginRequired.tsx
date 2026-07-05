@@ -2,16 +2,13 @@
 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-import {
-    completeRedirectSignIn,
-    signInWithGoogleSession,
-} from '@/utils/googleSignIn';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { renderGoogleSignInButton } from '@/utils/googleSignIn';
 
 export default function LoginRequired() {
     const router = useRouter();
     const [error, setError] = useState<string | null>(null);
-    const [submitting, setSubmitting] = useState(false);
+    const buttonRef = useRef<HTMLDivElement>(null);
 
     const closeModal = useCallback(() => {
         if (window.history.length > 1) {
@@ -23,6 +20,16 @@ export default function LoginRequired() {
     }, [router]);
 
     useEffect(() => {
+        if (!buttonRef.current) return;
+
+        renderGoogleSignInButton(
+            buttonRef.current,
+            () => window.location.reload(),
+            (error) => setError(error.message)
+        );
+    }, []);
+
+    useEffect(() => {
         const closeOnEscape = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 closeModal();
@@ -32,44 +39,6 @@ export default function LoginRequired() {
         window.addEventListener('keydown', closeOnEscape);
         return () => window.removeEventListener('keydown', closeOnEscape);
     }, [closeModal]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        completeRedirectSignIn()
-            .then((signedIn) => {
-                if (signedIn && !cancelled) {
-                    window.location.reload();
-                }
-            })
-            .catch((err) => {
-                setError(
-                    err instanceof Error
-                        ? err.message
-                        : 'Google sign-in failed'
-                );
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    const login = async () => {
-        setSubmitting(true);
-        setError(null);
-
-        try {
-            const signedIn = await signInWithGoogleSession();
-            if (signedIn) {
-                window.location.reload();
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Login failed');
-        } finally {
-            setSubmitting(false);
-        }
-    };
 
     return (
         <main
@@ -90,6 +59,7 @@ export default function LoginRequired() {
                 >
                     &times;
                 </button>
+
                 <Image
                     src="/logos/saslogo.png"
                     alt="SAS"
@@ -98,30 +68,26 @@ export default function LoginRequired() {
                     priority
                     className="mb-4 h-16 w-16 object-contain"
                 />
+
                 <h1 className="mb-2 font-display text-2xl font-semibold sm:text-3xl">
                     Sign in to review housing and see room status.
                 </h1>
+
                 <p className="mb-5 text-sm text-sas-black/65">
                     Use your Google account to view and write room reviews.
                 </p>
-                {error && (
-                    <p className="mt-3 text-sm text-sas-green">{error}</p>
-                )}
-                <button
-                    type="button"
-                    onClick={login}
-                    disabled={submitting}
-                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-sas-green px-4 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
-                >
-                    <Image
-                        src="/google-sign.svg"
-                        alt=""
-                        width={20}
-                        height={20}
-                        className="h-5 w-5"
-                    />
-                    {submitting ? 'Signing in...' : 'Google Sign In'}
-                </button>
+
+                <div className="mt-5">
+                    <div ref={buttonRef}
+                     className="flex justify-center"
+                        />
+
+                    {error && (
+                        <p className="mt-2 text-sm text-red-600">
+                            {error}
+                        </p>
+                    )}
+                </div>
             </div>
         </main>
     );

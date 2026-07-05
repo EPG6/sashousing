@@ -1,29 +1,22 @@
-import { FirebaseError } from 'firebase/app';
 import {
-    getRedirectResult,
     GoogleAuthProvider,
-    signInWithPopup,
-    signInWithRedirect,
+    signInWithCredential,
     UserCredential,
 } from 'firebase/auth';
 import { backendUrl } from '@/utils/api';
 import { getFirebaseAuth } from '@/utils/firebase';
 
-const getGoogleProvider = () => {
-    const provider = new GoogleAuthProvider();
-    provider.addScope('profile');
-    provider.addScope('email');
+declare global {
+    interface Window {
+        google?: any;
+    }
+}
 
-    return provider;
-};
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 
 const createBackendSession = async (result: UserCredential) => {
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential) {
-        throw new Error('Google Sign-In failed: No credential');
-    }
-
     const idToken = await result.user.getIdToken();
+
     const response = await fetch(`${backendUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -38,33 +31,52 @@ const createBackendSession = async (result: UserCredential) => {
     return result;
 };
 
-export const completeRedirectSignIn = async () => {
-    const result = await getRedirectResult(getFirebaseAuth());
-    if (!result) {
-        return false;
+export const renderGoogleSignInButton = (
+    element: HTMLElement,
+    onSuccess?: () => void,
+    onError?: (error: Error) => void
+) => {
+    if (!window.google?.accounts?.id) {
+        onError?.(new Error('Google Identity Services SDK not loaded'));
+        return;
     }
 
-    await createBackendSession(result);
-    return true;
-};
+    window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response: { credential?: string }) => {
+            try {
+                if (!response.credential) {
+                    throw new Error('Google Sign-In failed: No credential');
+                }
 
-export const signInWithGoogleSession = async () => {
-    const auth = getFirebaseAuth();
-    const provider = getGoogleProvider();
+                const auth = getFirebaseAuth();
 
-    try {
-        const result = await signInWithPopup(auth, provider);
-        await createBackendSession(result);
-        return true;
-    } catch (error) {
-        if (
-            error instanceof FirebaseError &&
-            error.code === 'auth/popup-blocked'
-        ) {
-            await signInWithRedirect(auth, provider);
-            return false;
-        }
+                const firebaseCredential =
+                    GoogleAuthProvider.credential(response.credential);
 
-        throw error;
-    }
+                const result = await signInWithCredential(
+                    auth,
+                    firebaseCredential
+                );
+
+                await createBackendSession(result);
+
+                onSuccess?.();
+            } catch (error) {
+                onError?.(error as Error);
+            }
+        },
+    });
+
+    element.innerHTML = '';
+
+    window.google.accounts.id.renderButton(element, {
+        theme: 'outline',
+        size: 'large',
+        type: 'standard',
+        text: 'signin_with',
+        shape: 'rectangular',
+        width: 100,
+        locale: 'en',
+    });
 };
