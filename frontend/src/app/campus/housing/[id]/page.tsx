@@ -22,7 +22,7 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type RoomDrawStatusFilter = 'all' | 'not_taken' | 'taken';
 
@@ -52,6 +52,84 @@ const toDateTimeInputValue = (value?: string | Date | null) => {
 
 const toIsoDateValue = (value: string) =>
     value ? new Date(value).toISOString() : '';
+
+const roomDrawStatusesEqual = (
+    first?: Room['roomDrawStatus'],
+    second?: Room['roomDrawStatus']
+) =>
+    first?.status === second?.status &&
+    first?.isOwner === second?.isOwner &&
+    first?.updatedAt === second?.updatedAt &&
+    first?.markedByUserId === second?.markedByUserId &&
+    first?.markedByName === second?.markedByName &&
+    first?.markedByEmail === second?.markedByEmail;
+
+const roomPreferenceHoldersEqual = (
+    first?: RoomPreferenceHolder[],
+    second?: RoomPreferenceHolder[]
+) => {
+    if (first === second) {
+        return true;
+    }
+    if (!first?.length && !second?.length) {
+        return true;
+    }
+    if (!first || !second || first.length !== second.length) {
+        return false;
+    }
+
+    return first.every((holder, index) => {
+        const nextHolder = second[index];
+        return (
+            holder.initials === nextHolder.initials &&
+            holder.name === nextHolder.name &&
+            holder.rank === nextHolder.rank &&
+            holder.classYear === nextHolder.classYear &&
+            holder.drawDate === nextHolder.drawDate &&
+            holder.isOwner === nextHolder.isOwner
+        );
+    });
+};
+
+const roomRatingsEqual = (
+    room: Room,
+    nextRating?: { overallAverage: number; reviewCount: number }
+) =>
+    (room.averageRating || 0) === (nextRating?.overallAverage || 0) &&
+    (room.reviewCount || 0) === (nextRating?.reviewCount || 0);
+
+const roomBaseDataEqual = (first: Room, second: Room) =>
+    first._id === second._id &&
+    first.id === second.id &&
+    first.room_number === second.room_number &&
+    first.size === second.size &&
+    first.occupancy_type === second.occupancy_type &&
+    first.closet_type === second.closet_type &&
+    first.bathroom_type === second.bathroom_type &&
+    first.floor === second.floor &&
+    first.eligibleYear === second.eligibleYear &&
+    first.sink === second.sink &&
+    first.closet === second.closet &&
+    first.closetType === second.closetType &&
+    first.balcony === second.balcony &&
+    first.privateBath === second.privateBath &&
+    first.suiteBath === second.suiteBath &&
+    first.note === second.note &&
+    first.housing_building_id === second.housing_building_id;
+
+const numberSetsEqual = (first: Set<number>, second: Set<number>) => {
+    if (first.size !== second.size) {
+        return false;
+    }
+
+    for (const value of first) {
+        if (!second.has(value)) {
+            return false;
+        }
+    }
+
+    return true;
+};
 
 export default function DynamicRooms() {
     const params = useParams();
@@ -234,21 +312,52 @@ export default function DynamicRooms() {
                         roomDrawData.priority?.drawDate
                     ),
                 });
-                setPreferenceRoomIds(
-                    new Set(
-                        preferencesData
-                            .filter((preference) => preference.status !== 'bumped')
-                            .map((preference) => preference.housing_room_id)
-                    )
+                const nextPreferenceRoomIds = new Set(
+                    preferencesData
+                        .filter((preference) => preference.status !== 'bumped')
+                        .map((preference) => preference.housing_room_id)
                 );
-                setRooms(
-                    roomsData.map((room: Room) => ({
-                        ...room,
-                        averageRating: ratingsMap[room.id]?.overallAverage || 0,
-                        reviewCount: ratingsMap[room.id]?.reviewCount || 0,
-                        roomDrawStatus: roomDrawData.statuses[room.id],
-                        roomPreferenceHolders: preferenceHolders[room.id],
-                    }))
+                setPreferenceRoomIds((currentPreferenceRoomIds) =>
+                    numberSetsEqual(
+                        currentPreferenceRoomIds,
+                        nextPreferenceRoomIds
+                    )
+                        ? currentPreferenceRoomIds
+                        : nextPreferenceRoomIds
+                );
+                setRooms((currentRooms) =>
+                    roomsData.map((room: Room) => {
+                        const existingRoom = currentRooms.find(
+                            (currentRoom) => currentRoom.id === room.id
+                        );
+                        const nextRating = ratingsMap[room.id];
+                        const nextStatus = roomDrawData.statuses[room.id];
+                        const nextHolders = preferenceHolders[room.id];
+
+                        if (
+                            existingRoom &&
+                            roomBaseDataEqual(existingRoom, room) &&
+                            roomRatingsEqual(existingRoom, nextRating) &&
+                            roomDrawStatusesEqual(
+                                existingRoom.roomDrawStatus,
+                                nextStatus
+                            ) &&
+                            roomPreferenceHoldersEqual(
+                                existingRoom.roomPreferenceHolders,
+                                nextHolders
+                            )
+                        ) {
+                            return existingRoom;
+                        }
+
+                        return {
+                            ...room,
+                            averageRating: nextRating?.overallAverage || 0,
+                            reviewCount: nextRating?.reviewCount || 0,
+                            roomDrawStatus: nextStatus,
+                            roomPreferenceHolders: nextHolders,
+                        };
+                    })
                 );
             } catch (error) {
                 console.error('Error fetching rooms:', error);
@@ -265,7 +374,7 @@ export default function DynamicRooms() {
         setRoomSearchQuery(initialRoomSearchQuery);
     }, [initialRoomSearchQuery]);
 
-    const refreshRoomDrawStatuses = async () => {
+    const refreshRoomDrawStatuses = useCallback(async () => {
         if (resolvedBuildingId === null) {
             return;
         }
@@ -283,12 +392,24 @@ export default function DynamicRooms() {
         setRoomDrawVisible(data.isVisible);
         setRoomDrawRequiresPriority(Boolean(data.requiresPriority));
         setRooms((currentRooms) =>
-            currentRooms.map((currentRoom) => ({
-                ...currentRoom,
-                roomDrawStatus: data.statuses[currentRoom.id],
-            }))
+            currentRooms.map((currentRoom) => {
+                const nextStatus = data.statuses[currentRoom.id];
+                if (
+                    roomDrawStatusesEqual(
+                        currentRoom.roomDrawStatus,
+                        nextStatus
+                    )
+                ) {
+                    return currentRoom;
+                }
+
+                return {
+                    ...currentRoom,
+                    roomDrawStatus: nextStatus,
+                };
+            })
         );
-    };
+    }, [resolvedBuildingId]);
 
     useEffect(() => {
         if (!roomDrawVisible || resolvedBuildingId === null) {
@@ -316,9 +437,9 @@ export default function DynamicRooms() {
             );
             eventSource.close();
         };
-    }, [resolvedBuildingId, roomDrawVisible]);
+    }, [refreshRoomDrawStatuses, resolvedBuildingId, roomDrawVisible]);
 
-    const updateRoomDrawStatus = async (
+    const updateRoomDrawStatus = useCallback(async (
         roomId: number,
         nextStatus: 'taken' | 'not_taken'
     ) => {
@@ -344,7 +465,7 @@ export default function DynamicRooms() {
         }
 
         await refreshRoomDrawStatuses();
-    };
+    }, [refreshRoomDrawStatuses]);
 
     const saveRoomDrawPriority = async (
         event: React.FormEvent<HTMLFormElement>
@@ -414,19 +535,40 @@ export default function DynamicRooms() {
 
             if (statusesData) {
                 setRooms((currentRooms) =>
-                    currentRooms.map((room) => ({
-                        ...room,
-                        roomDrawStatus: statusesData.statuses[room.id],
-                        roomPreferenceHolders: holdersData[room.id],
-                    }))
+                    currentRooms.map((room) => {
+                        const nextStatus = statusesData.statuses[room.id];
+                        const nextHolders = holdersData[room.id];
+
+                        if (
+                            roomDrawStatusesEqual(
+                                room.roomDrawStatus,
+                                nextStatus
+                            ) &&
+                            roomPreferenceHoldersEqual(
+                                room.roomPreferenceHolders,
+                                nextHolders
+                            )
+                        ) {
+                            return room;
+                        }
+
+                        return {
+                            ...room,
+                            roomDrawStatus: nextStatus,
+                            roomPreferenceHolders: nextHolders,
+                        };
+                    })
                 );
             }
-            setPreferenceRoomIds(
-                new Set(
-                    preferencesData
-                        .filter((preference) => preference.status !== 'bumped')
-                        .map((preference) => preference.housing_room_id)
-                )
+            const nextPreferenceRoomIds = new Set(
+                preferencesData
+                    .filter((preference) => preference.status !== 'bumped')
+                    .map((preference) => preference.housing_room_id)
+            );
+            setPreferenceRoomIds((currentPreferenceRoomIds) =>
+                numberSetsEqual(currentPreferenceRoomIds, nextPreferenceRoomIds)
+                    ? currentPreferenceRoomIds
+                    : nextPreferenceRoomIds
             );
         } catch (error) {
             setError(
@@ -440,7 +582,7 @@ export default function DynamicRooms() {
         }
     };
 
-    const refreshRoomPreferences = async () => {
+    const refreshRoomPreferences = useCallback(async () => {
         if (resolvedBuildingId === null) {
             return;
         }
@@ -464,20 +606,36 @@ export default function DynamicRooms() {
               >)
             : {};
 
-        setPreferenceRoomIds(
-            new Set(
-                preferencesData
-                    .filter((preference) => preference.status !== 'bumped')
-                    .map((preference) => preference.housing_room_id)
-            )
+        const nextPreferenceRoomIds = new Set(
+            preferencesData
+                .filter((preference) => preference.status !== 'bumped')
+                .map((preference) => preference.housing_room_id)
+        );
+
+        setPreferenceRoomIds((currentPreferenceRoomIds) =>
+            numberSetsEqual(currentPreferenceRoomIds, nextPreferenceRoomIds)
+                ? currentPreferenceRoomIds
+                : nextPreferenceRoomIds
         );
         setRooms((currentRooms) =>
-            currentRooms.map((room) => ({
-                ...room,
-                roomPreferenceHolders: holdersData[room.id],
-            }))
+            currentRooms.map((room) => {
+                const nextHolders = holdersData[room.id];
+                if (
+                    roomPreferenceHoldersEqual(
+                        room.roomPreferenceHolders,
+                        nextHolders
+                    )
+                ) {
+                    return room;
+                }
+
+                return {
+                    ...room,
+                    roomPreferenceHolders: nextHolders,
+                };
+            })
         );
-    };
+    }, [resolvedBuildingId]);
 
     useEffect(() => {
         if (!user || !roomDrawVisible || roomDrawRequiresPriority || resolvedBuildingId === null) {
@@ -505,7 +663,13 @@ export default function DynamicRooms() {
             );
             eventSource.close();
         };
-    }, [resolvedBuildingId, roomDrawRequiresPriority, roomDrawVisible, user]);
+    }, [
+        refreshRoomPreferences,
+        resolvedBuildingId,
+        roomDrawRequiresPriority,
+        roomDrawVisible,
+        user,
+    ]);
 
     useEffect(() => {
         const eventSource = new EventSource(
@@ -526,11 +690,20 @@ export default function DynamicRooms() {
                 setRoomDrawRequiresPriority(false);
                 setPreferenceRoomIds(new Set());
                 setRooms((currentRooms) =>
-                    currentRooms.map((room) => ({
-                        ...room,
-                        roomDrawStatus: undefined,
-                        roomPreferenceHolders: undefined,
-                    }))
+                    currentRooms.map((room) => {
+                        if (
+                            !room.roomDrawStatus &&
+                            !room.roomPreferenceHolders?.length
+                        ) {
+                            return room;
+                        }
+
+                        return {
+                            ...room,
+                            roomDrawStatus: undefined,
+                            roomPreferenceHolders: undefined,
+                        };
+                    })
                 );
             }
         };
@@ -549,7 +722,7 @@ export default function DynamicRooms() {
         };
     }, []);
 
-    const addRoomPreference = async (roomId: number) => {
+    const addRoomPreference = useCallback(async (roomId: number) => {
         const response = await fetch(
             `${backendUrl}/api/campus/housing/room-preferences/rooms/${roomId}`,
             {
@@ -568,9 +741,9 @@ export default function DynamicRooms() {
         }
 
         await refreshRoomPreferences();
-    };
+    }, [refreshRoomPreferences]);
 
-    const removeRoomPreference = async (roomId: number) => {
+    const removeRoomPreference = useCallback(async (roomId: number) => {
         const response = await fetch(
             `${backendUrl}/api/campus/housing/room-preferences/rooms/${roomId}`,
             {
@@ -589,7 +762,7 @@ export default function DynamicRooms() {
         }
 
         await refreshRoomPreferences();
-    };
+    }, [refreshRoomPreferences]);
 
     const displayedRooms = useMemo(() => {
         const normalizedQuery = roomSearchQuery.trim().toLowerCase();
@@ -668,13 +841,23 @@ export default function DynamicRooms() {
         user?.isAdmin,
     ]);
 
-    const takenRoomCount = rooms.filter(
-        (room) => room.roomDrawStatus?.status === 'taken'
-    ).length;
+    const takenRoomCount = useMemo(
+        () =>
+            rooms.filter((room) => room.roomDrawStatus?.status === 'taken')
+                .length,
+        [rooms]
+    );
     const notTakenRoomCount = rooms.length - takenRoomCount;
-    const currentUserTakenRoom = user?.isAdmin
-        ? null
-        : rooms.find((room) => room.roomDrawStatus?.isOwner) || null;
+    const currentUserTakenRoom = useMemo(
+        () =>
+            user?.isAdmin
+                ? null
+                : rooms.find((room) => room.roomDrawStatus?.isOwner) || null,
+        [rooms, user?.isAdmin]
+    );
+    const currentUserTakenRoomMessage = currentUserTakenRoom
+        ? `You already marked room ${currentUserTakenRoom.room_number} taken. Mark it not taken before choosing another room.`
+        : undefined;
     const floorPlanPaths = building
         ? getBuildingFloorPlanPaths(building.name)
         : [];
@@ -946,9 +1129,7 @@ export default function DynamicRooms() {
                                     currentUserTakenRoom.id === room.id
                                 }
                                 roomTakenDisabledMessage={
-                                    currentUserTakenRoom
-                                        ? `You already marked room ${currentUserTakenRoom.room_number} taken. Mark it not taken before choosing another room.`
-                                        : undefined
+                                    currentUserTakenRoomMessage
                                 }
                                 canManagePreferences={
                                     !!user &&

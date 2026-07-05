@@ -10,7 +10,7 @@ import { Building, Room } from '@/types';
 import { backendUrl } from '@/utils/api';
 import { getApiErrorMessage, getUserSafeMessage } from '@/utils/apiErrors';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 type BuildingSearchDoc = Building & {
     roomNumbers: string[];
@@ -33,6 +33,22 @@ type RoomForm = {
     suiteBath: string;
     note: string;
 };
+
+type BuildingForm = {
+    name: string;
+    campus: string;
+    floors: string;
+    eligibleYear: string;
+    description: string;
+};
+
+const toBuildingForm = (building: BuildingSearchDoc): BuildingForm => ({
+    name: building.name,
+    campus: building.campus,
+    floors: String(building.floors),
+    eligibleYear: building.eligibleYear ? String(building.eligibleYear) : '',
+    description: building.description || '',
+});
 
 const toRoomForm = (room: Room): RoomForm => ({
     room_number: room.room_number,
@@ -127,6 +143,329 @@ const getRoomFieldValue = (
     return value;
 };
 
+type BuildingDetailsFormProps = {
+    building: BuildingSearchDoc;
+    isEditing: boolean;
+    saving: boolean;
+    deleting: boolean;
+    onStartEdit: () => void;
+    onCancelEdit: () => void;
+    onSave: (buildingForm: BuildingForm) => Promise<void>;
+    onDelete: () => void;
+};
+
+const BuildingDetailsForm = memo(function BuildingDetailsForm({
+    building,
+    isEditing,
+    saving,
+    deleting,
+    onStartEdit,
+    onCancelEdit,
+    onSave,
+    onDelete,
+}: BuildingDetailsFormProps) {
+    const [buildingForm, setBuildingForm] = useState<BuildingForm>(() =>
+        toBuildingForm(building)
+    );
+
+    useEffect(() => {
+        if (!isEditing) {
+            setBuildingForm(toBuildingForm(building));
+        }
+    }, [building, isEditing]);
+
+    const submitBuilding = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        await onSave(buildingForm);
+    };
+
+    const cancelEdit = () => {
+        setBuildingForm(toBuildingForm(building));
+        onCancelEdit();
+    };
+
+    return (
+        <form
+            onSubmit={submitBuilding}
+            className="rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6"
+        >
+            <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
+                Building Details
+            </h2>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                    <span className="text-sm font-medium text-sas-black/75">
+                        Name
+                    </span>
+                    <input
+                        value={buildingForm.name}
+                        disabled={!isEditing}
+                        onChange={(event) =>
+                            setBuildingForm((current) => ({
+                                ...current,
+                                name: event.target.value,
+                            }))
+                        }
+                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                </label>
+                <label className="block">
+                    <span className="text-sm font-medium text-sas-black/75">
+                        Campus
+                    </span>
+                    <input
+                        value={buildingForm.campus}
+                        disabled={!isEditing}
+                        onChange={(event) =>
+                            setBuildingForm((current) => ({
+                                ...current,
+                                campus: event.target.value,
+                            }))
+                        }
+                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                </label>
+                <label className="block">
+                    <span className="text-sm font-medium text-sas-black/75">
+                        Floors
+                    </span>
+                    <input
+                        type="number"
+                        min="1"
+                        value={buildingForm.floors}
+                        disabled={!isEditing}
+                        onChange={(event) =>
+                            setBuildingForm((current) => ({
+                                ...current,
+                                floors: event.target.value,
+                            }))
+                        }
+                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                </label>
+                <label className="block">
+                    <span className="text-sm font-medium text-sas-black/75">
+                        Eligible Year
+                    </span>
+                    <input
+                        type="number"
+                        min="1"
+                        max="4"
+                        value={buildingForm.eligibleYear}
+                        disabled={!isEditing}
+                        onChange={(event) =>
+                            setBuildingForm((current) => ({
+                                ...current,
+                                eligibleYear: event.target.value,
+                            }))
+                        }
+                        placeholder="All years"
+                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                </label>
+                <label className="block sm:col-span-2">
+                    <span className="text-sm font-medium text-sas-black/75">
+                        Description
+                    </span>
+                    <textarea
+                        value={buildingForm.description}
+                        disabled={!isEditing}
+                        onChange={(event) =>
+                            setBuildingForm((current) => ({
+                                ...current,
+                                description: event.target.value,
+                            }))
+                        }
+                        rows={4}
+                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                </label>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                {isEditing ? (
+                    <>
+                        <button
+                            type="button"
+                            onClick={cancelEdit}
+                            disabled={saving}
+                            className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            className="w-full rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60 sm:w-auto"
+                        >
+                            {saving ? 'Saving...' : 'Save Building'}
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <button
+                            type="button"
+                            onClick={onStartEdit}
+                            disabled={deleting}
+                            className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
+                        >
+                            Edit Building
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onDelete}
+                            disabled={deleting}
+                            className="w-full rounded-md border border-red-700 px-5 py-2 font-medium text-red-700 hover:bg-red-700 hover:text-white disabled:opacity-60 sm:w-auto"
+                        >
+                            {deleting ? 'Deleting...' : 'Delete Building'}
+                        </button>
+                    </>
+                )}
+            </div>
+        </form>
+    );
+});
+
+type AdminRoomEditorProps = {
+    room: Room;
+    isEditing: boolean;
+    saving: boolean;
+    deleting: boolean;
+    savingDisabled: boolean;
+    deletingDisabled: boolean;
+    variant: 'card' | 'row';
+    onStartEdit: (roomId: number) => void;
+    onCancelEdit: () => void;
+    onSave: (roomId: number, roomForm: RoomForm) => Promise<void>;
+    onDelete: (roomId: number) => void;
+};
+
+const AdminRoomEditor = memo(function AdminRoomEditor({
+    room,
+    isEditing,
+    saving,
+    deleting,
+    savingDisabled,
+    deletingDisabled,
+    variant,
+    onStartEdit,
+    onCancelEdit,
+    onSave,
+    onDelete,
+}: AdminRoomEditorProps) {
+    const [roomForm, setRoomForm] = useState<RoomForm>(() => toRoomForm(room));
+
+    useEffect(() => {
+        if (!isEditing) {
+            setRoomForm(toRoomForm(room));
+        }
+    }, [isEditing, room]);
+
+    const updateRoomField = (fieldKey: keyof RoomForm, value: string) => {
+        setRoomForm((current) => ({
+            ...current,
+            [fieldKey]: value,
+        }));
+    };
+
+    const actions = isEditing ? (
+        <div className="flex flex-wrap gap-2">
+            <button
+                type="button"
+                onClick={() => {
+                    setRoomForm(toRoomForm(room));
+                    onCancelEdit();
+                }}
+                disabled={saving}
+                className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+            >
+                Cancel
+            </button>
+            <button
+                type="button"
+                onClick={() => onSave(room.id, roomForm)}
+                disabled={saving}
+                className="rounded-md bg-sas-green px-3 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
+            >
+                {saving ? 'Saving...' : 'Save'}
+            </button>
+        </div>
+    ) : (
+        <div className="flex flex-wrap gap-2">
+            <button
+                type="button"
+                onClick={() => onStartEdit(room.id)}
+                disabled={savingDisabled}
+                className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+            >
+                Edit
+            </button>
+            <button
+                type="button"
+                onClick={() => onDelete(room.id)}
+                disabled={deletingDisabled}
+                className="rounded-md border border-red-700 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-700 hover:text-white disabled:opacity-60"
+            >
+                {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+        </div>
+    );
+
+    if (variant === 'card') {
+        return (
+            <div className="rounded-md border border-sas-line p-4">
+                <p className="font-display text-lg font-semibold text-sas-black">
+                    Room {roomForm.room_number}
+                </p>
+                <div className="mt-3 grid gap-3">
+                    {ROOM_FIELDS.map((field) => (
+                        <label key={field.key} className="block">
+                            <span className="text-sm font-medium text-sas-black/75">
+                                {field.label}
+                            </span>
+                            <input
+                                type={field.type}
+                                value={getRoomFieldValue(
+                                    roomForm,
+                                    field.key,
+                                    isEditing
+                                )}
+                                disabled={!isEditing}
+                                onChange={(event) =>
+                                    updateRoomField(
+                                        field.key,
+                                        event.target.value
+                                    )
+                                }
+                                className="mt-1 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                            />
+                        </label>
+                    ))}
+                </div>
+                <div className="mt-4">{actions}</div>
+            </div>
+        );
+    }
+
+    return (
+        <tr className="border-b border-sas-line last:border-b-0">
+            {ROOM_FIELDS.map((field) => (
+                <td key={field.key} className="py-3 pr-3">
+                    <input
+                        type={field.type}
+                        value={getRoomFieldValue(roomForm, field.key, isEditing)}
+                        disabled={!isEditing}
+                        onChange={(event) =>
+                            updateRoomField(field.key, event.target.value)
+                        }
+                        className="w-full min-w-24 rounded-md border border-sas-line px-2 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
+                    />
+                </td>
+            ))}
+            <td className="py-3 pr-3">{actions}</td>
+        </tr>
+    );
+});
+
 export default function HousingDataAdminPage() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
@@ -135,15 +474,7 @@ export default function HousingDataAdminPage() {
     const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(
         null
     );
-    const [buildingForm, setBuildingForm] = useState({
-        name: '',
-        campus: '',
-        floors: '',
-        eligibleYear: '',
-        description: '',
-    });
     const [rooms, setRooms] = useState<Room[]>([]);
-    const [roomForms, setRoomForms] = useState<Record<number, RoomForm>>({});
     const [editingBuilding, setEditingBuilding] = useState(false);
     const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
@@ -326,26 +657,8 @@ export default function HousingDataAdminPage() {
     }, [filteredBuildings, hasUnsavedEdits, selectedBuildingId]);
 
     useEffect(() => {
-        if (!selectedBuilding) {
-            return;
-        }
-
-        setBuildingForm({
-            name: selectedBuilding.name,
-            campus: selectedBuilding.campus,
-            floors: String(selectedBuilding.floors),
-            eligibleYear: selectedBuilding.eligibleYear
-                ? String(selectedBuilding.eligibleYear)
-                : '',
-            description: selectedBuilding.description || '',
-        });
-        setEditingBuilding(false);
-    }, [selectedBuilding]);
-
-    useEffect(() => {
         if (!selectedBuildingId) {
             setRooms([]);
-            setRoomForms({});
             return;
         }
 
@@ -365,12 +678,6 @@ export default function HousingDataAdminPage() {
 
                 const data = response.ok ? ((await response.json()) as Room[]) : [];
                 setRooms(data);
-                setRoomForms(
-                    data.reduce<Record<number, RoomForm>>((acc, room) => {
-                        acc[room.id] = toRoomForm(room);
-                        return acc;
-                    }, {})
-                );
             } catch (error) {
                 console.error('Room data load error:', error);
                 setError('Could not load room data.');
@@ -382,8 +689,7 @@ export default function HousingDataAdminPage() {
         fetchRooms();
     }, [selectedBuildingId]);
 
-    const saveBuilding = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    const saveBuilding = useCallback(async (buildingForm: BuildingForm) => {
         if (!selectedBuildingId) {
             return;
         }
@@ -444,24 +750,11 @@ export default function HousingDataAdminPage() {
         } finally {
             setSavingBuilding(false);
         }
-    };
+    }, [selectedBuildingId]);
 
-    const cancelBuildingEdit = () => {
-        if (!selectedBuilding) {
-            return;
-        }
-
-        setBuildingForm({
-            name: selectedBuilding.name,
-            campus: selectedBuilding.campus,
-            floors: String(selectedBuilding.floors),
-            eligibleYear: selectedBuilding.eligibleYear
-                ? String(selectedBuilding.eligibleYear)
-                : '',
-            description: selectedBuilding.description || '',
-        });
+    const cancelBuildingEdit = useCallback(() => {
         setEditingBuilding(false);
-    };
+    }, []);
 
     const deleteBuilding = async () => {
         if (pendingDeleteBuildingId === null) {
@@ -500,7 +793,6 @@ export default function HousingDataAdminPage() {
                 return nextBuildings;
             });
             setRooms([]);
-            setRoomForms({});
             setEditingBuilding(false);
             setEditingRoomId(null);
             setPendingDeleteBuildingId(null);
@@ -518,12 +810,7 @@ export default function HousingDataAdminPage() {
         }
     };
 
-    const saveRoom = async (roomId: number) => {
-        const roomForm = roomForms[roomId];
-        if (!roomForm) {
-            return;
-        }
-
+    const saveRoom = useCallback(async (roomId: number, roomForm: RoomForm) => {
         setSavingRoomId(roomId);
         setMessage(null);
         setError(null);
@@ -551,10 +838,6 @@ export default function HousingDataAdminPage() {
             setRooms((currentRooms) =>
                 currentRooms.map((room) => (room.id === data.id ? data : room))
             );
-            setRoomForms((currentForms) => ({
-                ...currentForms,
-                [data.id]: toRoomForm(data),
-            }));
             setMessage(`Room ${data.room_number} saved.`);
             setEditingRoomId(null);
         } catch (error) {
@@ -568,15 +851,11 @@ export default function HousingDataAdminPage() {
         } finally {
             setSavingRoomId(null);
         }
-    };
+    }, []);
 
-    const cancelRoomEdit = (room: Room) => {
-        setRoomForms((currentForms) => ({
-            ...currentForms,
-            [room.id]: toRoomForm(room),
-        }));
+    const cancelRoomEdit = useCallback(() => {
         setEditingRoomId(null);
-    };
+    }, []);
 
     const deleteRoom = async () => {
         if (pendingDeleteRoomId === null) {
@@ -603,18 +882,11 @@ export default function HousingDataAdminPage() {
             }
 
             const deletedRoomNumber =
-                pendingDeleteRoom?.room_number ||
-                roomForms[pendingDeleteRoomId]?.room_number ||
-                '';
+                pendingDeleteRoom?.room_number || '';
 
             setRooms((currentRooms) =>
                 currentRooms.filter((room) => room.id !== pendingDeleteRoomId)
             );
-            setRoomForms((currentForms) => {
-                const nextForms = { ...currentForms };
-                delete nextForms[pendingDeleteRoomId];
-                return nextForms;
-            });
             setBuildings((currentBuildings) =>
                 currentBuildings.map((building) =>
                     building.id === selectedBuildingId
@@ -648,46 +920,23 @@ export default function HousingDataAdminPage() {
         }
     };
 
-    const renderRoomActions = (room: Room, isEditingRoom: boolean) =>
-        isEditingRoom ? (
-            <div className="flex flex-wrap gap-2">
-                <button
-                    type="button"
-                    onClick={() => cancelRoomEdit(room)}
-                    disabled={savingRoomId === room.id}
-                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
-                >
-                    Cancel
-                </button>
-                <button
-                    type="button"
-                    onClick={() => saveRoom(room.id)}
-                    disabled={savingRoomId === room.id}
-                    className="rounded-md bg-sas-green px-3 py-2 text-sm font-medium text-sas-white hover:bg-sas-black disabled:opacity-60"
-                >
-                    {savingRoomId === room.id ? 'Saving...' : 'Save'}
-                </button>
-            </div>
-        ) : (
-            <div className="flex flex-wrap gap-2">
-                <button
-                    type="button"
-                    onClick={() => setEditingRoomId(room.id)}
-                    disabled={savingRoomId !== null || deletingRoomId !== null}
-                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
-                >
-                    Edit
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setPendingDeleteRoomId(room.id)}
-                    disabled={savingRoomId !== null || deletingRoomId !== null}
-                    className="rounded-md border border-red-700 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-700 hover:text-white disabled:opacity-60"
-                >
-                    {deletingRoomId === room.id ? 'Deleting...' : 'Delete'}
-                </button>
-            </div>
-        );
+    const startBuildingEdit = useCallback(() => {
+        setEditingBuilding(true);
+    }, []);
+
+    const requestDeleteSelectedBuilding = useCallback(() => {
+        if (selectedBuildingId !== null) {
+            setPendingDeleteBuildingId(selectedBuildingId);
+        }
+    }, [selectedBuildingId]);
+
+    const startRoomEdit = useCallback((roomId: number) => {
+        setEditingRoomId(roomId);
+    }, []);
+
+    const requestDeleteRoom = useCallback((roomId: number) => {
+        setPendingDeleteRoomId(roomId);
+    }, []);
 
     if (authLoading || loading) {
         return <Loading />;
@@ -832,10 +1081,7 @@ export default function HousingDataAdminPage() {
                 }
             >
                 This will permanently delete room{' '}
-                {pendingDeleteRoom?.room_number ||
-                    (pendingDeleteRoomId
-                        ? roomForms[pendingDeleteRoomId]?.room_number
-                        : '')}
+                {pendingDeleteRoom?.room_number || ''}
                 , including its reviews, room draw status, and room preferences.
             </AppModal>
             <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -973,154 +1219,16 @@ export default function HousingDataAdminPage() {
 
                 {selectedBuilding ? (
                     <>
-                        <form
-                            onSubmit={saveBuilding}
-                            className="rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6"
-                        >
-                            <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
-                                Building Details
-                            </h2>
-                            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                                <label className="block">
-                                    <span className="text-sm font-medium text-sas-black/75">
-                                        Name
-                                    </span>
-                                    <input
-                                        value={buildingForm.name}
-                                        disabled={!editingBuilding}
-                                        onChange={(event) =>
-                                            setBuildingForm((current) => ({
-                                                ...current,
-                                                name: event.target.value,
-                                            }))
-                                        }
-                                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                    />
-                                </label>
-                                <label className="block">
-                                    <span className="text-sm font-medium text-sas-black/75">
-                                        Campus
-                                    </span>
-                                    <input
-                                        value={buildingForm.campus}
-                                        disabled={!editingBuilding}
-                                        onChange={(event) =>
-                                            setBuildingForm((current) => ({
-                                                ...current,
-                                                campus: event.target.value,
-                                            }))
-                                        }
-                                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                    />
-                                </label>
-                                <label className="block">
-                                    <span className="text-sm font-medium text-sas-black/75">
-                                        Floors
-                                    </span>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        value={buildingForm.floors}
-                                        disabled={!editingBuilding}
-                                        onChange={(event) =>
-                                            setBuildingForm((current) => ({
-                                                ...current,
-                                                floors: event.target.value,
-                                            }))
-                                        }
-                                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                    />
-                                </label>
-                                <label className="block">
-                                    <span className="text-sm font-medium text-sas-black/75">
-                                        Eligible Year
-                                    </span>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="4"
-                                        value={buildingForm.eligibleYear}
-                                        disabled={!editingBuilding}
-                                        onChange={(event) =>
-                                            setBuildingForm((current) => ({
-                                                ...current,
-                                                eligibleYear:
-                                                    event.target.value,
-                                            }))
-                                        }
-                                        placeholder="All years"
-                                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                    />
-                                </label>
-                                <label className="block sm:col-span-2">
-                                    <span className="text-sm font-medium text-sas-black/75">
-                                        Description
-                                    </span>
-                                    <textarea
-                                        value={buildingForm.description}
-                                        disabled={!editingBuilding}
-                                        onChange={(event) =>
-                                            setBuildingForm((current) => ({
-                                                ...current,
-                                                description: event.target.value,
-                                            }))
-                                        }
-                                        rows={4}
-                                        className="mt-2 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                    />
-                                </label>
-                            </div>
-                            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                                {editingBuilding ? (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={cancelBuildingEdit}
-                                            disabled={savingBuilding}
-                                            className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={savingBuilding}
-                                            className="w-full rounded-md bg-sas-green px-5 py-2 font-medium text-sas-white hover:bg-sas-black disabled:opacity-60 sm:w-auto"
-                                        >
-                                            {savingBuilding
-                                                ? 'Saving...'
-                                                : 'Save Building'}
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setEditingBuilding(true)
-                                            }
-                                            disabled={deletingBuilding}
-                                            className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
-                                        >
-                                            Edit Building
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setPendingDeleteBuildingId(
-                                                    selectedBuilding.id
-                                                )
-                                            }
-                                            disabled={deletingBuilding}
-                                            className="w-full rounded-md border border-red-700 px-5 py-2 font-medium text-red-700 hover:bg-red-700 hover:text-white disabled:opacity-60 sm:w-auto"
-                                        >
-                                            {deletingBuilding
-                                                ? 'Deleting...'
-                                                : 'Delete Building'}
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        </form>
+                        <BuildingDetailsForm
+                            building={selectedBuilding}
+                            isEditing={editingBuilding}
+                            saving={savingBuilding}
+                            deleting={deletingBuilding}
+                            onStartEdit={startBuildingEdit}
+                            onCancelEdit={cancelBuildingEdit}
+                            onSave={saveBuilding}
+                            onDelete={requestDeleteSelectedBuilding}
+                        />
 
                         <div className="mt-8 rounded-md border border-sas-line bg-sas-white p-4 shadow-sm sm:p-6">
                             <h2 className="font-display text-xl font-semibold text-sas-black sm:text-2xl">
@@ -1137,88 +1245,34 @@ export default function HousingDataAdminPage() {
                             ) : (
                                 <>
                                     <div className="mt-5 space-y-4 md:hidden">
-                                        {rooms.map((room) => {
-                                            const roomForm = roomForms[room.id];
-                                            if (!roomForm) {
-                                                return null;
-                                            }
-                                            const isEditingRoom =
-                                                editingRoomId === room.id;
-
-                                            return (
-                                                <div
-                                                    key={room.id}
-                                                    className="rounded-md border border-sas-line p-4"
-                                                >
-                                                    <p className="font-display text-lg font-semibold text-sas-black">
-                                                        Room{' '}
-                                                        {roomForm.room_number}
-                                                    </p>
-                                                    <div className="mt-3 grid gap-3">
-                                                        {ROOM_FIELDS.map(
-                                                            (field) => (
-                                                                <label
-                                                                    key={
-                                                                        field.key
-                                                                    }
-                                                                    className="block"
-                                                                >
-                                                                    <span className="text-sm font-medium text-sas-black/75">
-                                                                        {
-                                                                            field.label
-                                                                        }
-                                                                    </span>
-                                                                    <input
-                                                                        type={
-                                                                            field.type
-                                                                        }
-                                                                        value={
-                                                                            getRoomFieldValue(
-                                                                                roomForm,
-                                                                                field.key,
-                                                                                isEditingRoom
-                                                                            )
-                                                                        }
-                                                                        disabled={
-                                                                            !isEditingRoom
-                                                                        }
-                                                                        onChange={(
-                                                                            event
-                                                                        ) =>
-                                                                            setRoomForms(
-                                                                                (
-                                                                                    current
-                                                                                ) => ({
-                                                                                    ...current,
-                                                                                    [room.id]:
-                                                                                        {
-                                                                                            ...current[
-                                                                                                room
-                                                                                                    .id
-                                                                                            ],
-                                                                                            [field.key]:
-                                                                                                event
-                                                                                                    .target
-                                                                                                    .value,
-                                                                                        },
-                                                                                })
-                                                                            )
-                                                                        }
-                                                                        className="mt-1 w-full rounded-md border border-sas-line px-3 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                                                    />
-                                                                </label>
-                                                            )
-                                                        )}
-                                                    </div>
-                                                    <div className="mt-4">
-                                                        {renderRoomActions(
-                                                            room,
-                                                            isEditingRoom
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                        {rooms.map((room) => (
+                                            <AdminRoomEditor
+                                                key={room.id}
+                                                room={room}
+                                                variant="card"
+                                                isEditing={
+                                                    editingRoomId === room.id
+                                                }
+                                                saving={
+                                                    savingRoomId === room.id
+                                                }
+                                                deleting={
+                                                    deletingRoomId === room.id
+                                                }
+                                                savingDisabled={
+                                                    savingRoomId !== null ||
+                                                    deletingRoomId !== null
+                                                }
+                                                deletingDisabled={
+                                                    savingRoomId !== null ||
+                                                    deletingRoomId !== null
+                                                }
+                                                onStartEdit={startRoomEdit}
+                                                onCancelEdit={cancelRoomEdit}
+                                                onSave={saveRoom}
+                                                onDelete={requestDeleteRoom}
+                                            />
+                                        ))}
                                     </div>
 
                                     <div className="mt-5 hidden overflow-x-auto md:block">
@@ -1245,79 +1299,47 @@ export default function HousingDataAdminPage() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {rooms.map((room) => {
-                                                    const roomForm =
-                                                        roomForms[room.id];
-                                                    if (!roomForm) {
-                                                        return null;
-                                                    }
-                                                    const isEditingRoom =
-                                                        editingRoomId ===
-                                                        room.id;
-
-                                                    return (
-                                                        <tr
-                                                            key={room.id}
-                                                            className="border-b border-sas-line last:border-b-0"
-                                                        >
-                                                            {ROOM_FIELDS.map(
-                                                                (field) => (
-                                                                    <td
-                                                                        key={
-                                                                            field.key
-                                                                        }
-                                                                        className="py-3 pr-3"
-                                                                    >
-                                                                        <input
-                                                                            type={
-                                                                                field.type
-                                                                            }
-                                                                            value={
-                                                                                getRoomFieldValue(
-                                                                                    roomForm,
-                                                                                    field.key,
-                                                                                    isEditingRoom
-                                                                                )
-                                                                            }
-                                                                            disabled={
-                                                                                !isEditingRoom
-                                                                            }
-                                                                            onChange={(
-                                                                                event
-                                                                            ) =>
-                                                                                setRoomForms(
-                                                                                    (
-                                                                                        current
-                                                                                    ) => ({
-                                                                                        ...current,
-                                                                                        [room.id]:
-                                                                                            {
-                                                                                                ...current[
-                                                                                                    room
-                                                                                                        .id
-                                                                                                ],
-                                                                                                [field.key]:
-                                                                                                    event
-                                                                                                        .target
-                                                                                                        .value,
-                                                                                            },
-                                                                                    })
-                                                                                )
-                                                                            }
-                                                                            className="w-full min-w-24 rounded-md border border-sas-line px-2 py-2 text-sas-black disabled:bg-sas-mist disabled:text-sas-black/65 focus:border-sas-green focus:outline-none focus:ring-2 focus:ring-sas-green/20"
-                                                                        />
-                                                                    </td>
-                                                                )
-                                                            )}
-                                                            <td className="py-3 pr-3">
-                                                                {renderRoomActions(
-                                                                    room,
-                                                                    isEditingRoom
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
+                                                {rooms.map((room) => (
+                                                    <AdminRoomEditor
+                                                        key={room.id}
+                                                        room={room}
+                                                        variant="row"
+                                                        isEditing={
+                                                            editingRoomId ===
+                                                            room.id
+                                                        }
+                                                        saving={
+                                                            savingRoomId ===
+                                                            room.id
+                                                        }
+                                                        deleting={
+                                                            deletingRoomId ===
+                                                            room.id
+                                                        }
+                                                        savingDisabled={
+                                                            savingRoomId !==
+                                                                null ||
+                                                            deletingRoomId !==
+                                                                null
+                                                        }
+                                                        deletingDisabled={
+                                                            savingRoomId !==
+                                                                null ||
+                                                            deletingRoomId !==
+                                                                null
+                                                        }
+                                                        onStartEdit={
+                                                            startRoomEdit
+                                                        }
+                                                        onCancelEdit={
+                                                            cancelRoomEdit
+                                                        }
+                                                        onSave={saveRoom}
+                                                        onDelete={
+                                                            requestDeleteRoom
+                                                        }
+                                                    />
+                                                ))}
                                             </tbody>
                                         </table>
                                     </div>

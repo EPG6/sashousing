@@ -3,7 +3,7 @@ import { RoomCardProps } from '@/types';
 import { getUserSafeMessage } from '@/utils/apiErrors';
 import { getBuildingSlug } from '@/utils/housingText';
 import Link from 'next/link';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
 export const StarRating = ({ rating }: { rating: number }) => {
     const totalStars = 5;
@@ -53,7 +53,39 @@ const formatBooleanFeature = (label: string, value: boolean | undefined) => {
     return `${label}: ${value ? 'Yes' : 'No'}`;
 };
 
-export const RoomCard = ({
+const roomCardPropsEqual = (
+    previous: RoomCardProps,
+    next: RoomCardProps
+) => {
+    if (
+        previous.buildingName !== next.buildingName ||
+        previous.room !== next.room ||
+        previous.canViewReviews !== next.canViewReviews ||
+        previous.canReportRoomDraw !== next.canReportRoomDraw ||
+        previous.canOverrideRoomDraw !== next.canOverrideRoomDraw ||
+        previous.canMarkRoomTaken !== next.canMarkRoomTaken ||
+        previous.roomTakenDisabledMessage !== next.roomTakenDisabledMessage ||
+        previous.canManagePreferences !== next.canManagePreferences ||
+        previous.isInPreferenceRanking !== next.isInPreferenceRanking ||
+        previous.onAddPreference !== next.onAddPreference ||
+        previous.onRemovePreference !== next.onRemovePreference ||
+        previous.onRoomDrawStatusChange !== next.onRoomDrawStatusChange
+    ) {
+        return false;
+    }
+
+    const rankCanAffectCard =
+        Boolean(next.canManagePreferences) &&
+        !next.isInPreferenceRanking &&
+        Boolean(next.room.roomPreferenceHolders?.length);
+
+    return (
+        !rankCanAffectCard ||
+        previous.nextPreferenceRank === next.nextPreferenceRank
+    );
+};
+
+export const RoomCard = memo(function RoomCard({
     buildingName,
     room,
     canViewReviews = true,
@@ -67,7 +99,7 @@ export const RoomCard = ({
     onAddPreference,
     onRemovePreference,
     onRoomDrawStatusChange,
-}: RoomCardProps) => {
+}: RoomCardProps) {
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [updatingPreference, setUpdatingPreference] = useState(false);
     const [preferenceMessage, setPreferenceMessage] = useState<string | null>(
@@ -413,4 +445,4 @@ export const RoomCard = ({
             )}
         </div>
     );
-};
+}, roomCardPropsEqual);
