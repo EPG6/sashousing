@@ -112,6 +112,22 @@ const parseOptionalShortText = (value: unknown, maxLength: number) => {
     return String(value).trim().slice(0, maxLength);
 };
 
+const deleteReviewPictures = async (
+    reviews: Array<{ pictures?: mongoose.Types.ObjectId[] }>
+) => {
+    const pictureIds = reviews.flatMap((review) => review.pictures || []);
+    if (pictureIds.length === 0) {
+        return;
+    }
+
+    const bucket = getHousingReviewPictures();
+    await Promise.all(
+        pictureIds.map((pictureId) =>
+            bucket.delete(pictureId).catch(() => undefined)
+        )
+    );
+};
+
 const parseReviewRating = (value: unknown) => {
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
@@ -420,6 +436,65 @@ router.patch(
 );
 
 /**
+ * @route   DELETE /api/campus/housing/admin/buildings/:buildingId
+ * @desc    Delete a housing building and related room data
+ * @access  Admin
+ */
+router.delete(
+    '/admin/buildings/:buildingId',
+    isAdmin,
+    async (req: Request, res: Response) => {
+        try {
+            const buildingId = parseInt(getParam(req.params.buildingId), 10);
+            if (isNaN(buildingId)) {
+                res.status(400).json({ message: 'Invalid building ID format' });
+                return;
+            }
+
+            const building = await HousingBuildings.findOne({ id: buildingId });
+            if (!building) {
+                res.status(404).json({ message: 'Building not found' });
+                return;
+            }
+
+            const rooms = await HousingRooms.find({
+                housing_building_id: buildingId,
+            }).select('id');
+            const roomIds = rooms.map((room) => room.id);
+            const reviews =
+                roomIds.length > 0
+                    ? await HousingReviews.find({
+                          housing_room_id: { $in: roomIds },
+                      }).select('pictures')
+                    : [];
+
+            await deleteReviewPictures(reviews);
+            await Promise.all([
+                HousingBuildings.deleteOne({ id: buildingId }),
+                HousingRooms.deleteMany({ housing_building_id: buildingId }),
+                HousingReviews.deleteMany({
+                    housing_room_id: { $in: roomIds },
+                }),
+                RoomDrawStatuses.deleteMany({
+                    housing_room_id: { $in: roomIds },
+                }),
+                RoomPreferences.deleteMany({
+                    housing_room_id: { $in: roomIds },
+                }),
+            ]);
+
+            res.json({
+                message: 'Building deleted',
+                deletedBuildingId: buildingId,
+                deletedRoomCount: roomIds.length,
+            });
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
  * @route   PATCH /api/campus/housing/admin/rooms/:roomId
  * @desc    Update housing room data
  * @access  Admin
@@ -594,6 +669,52 @@ router.patch(
             }
 
             res.json(updatedRoom);
+        } catch (error) {
+            res.status(500).json({ message: 'Server error' });
+        }
+    }
+);
+
+/**
+ * @route   DELETE /api/campus/housing/admin/rooms/:roomId
+ * @desc    Delete a housing room and related room data
+ * @access  Admin
+ */
+router.delete(
+    '/admin/rooms/:roomId',
+    isAdmin,
+    async (req: Request, res: Response) => {
+        try {
+            const roomId = parseInt(getParam(req.params.roomId), 10);
+            if (isNaN(roomId)) {
+                res.status(400).json({ message: 'Invalid room ID format' });
+                return;
+            }
+
+            const room = await HousingRooms.findOne({ id: roomId });
+            if (!room) {
+                res.status(404).json({ message: 'Room not found' });
+                return;
+            }
+
+            const reviews = await HousingReviews.find({
+                housing_room_id: roomId,
+            }).select('pictures');
+
+            await deleteReviewPictures(reviews);
+            await Promise.all([
+                HousingRooms.deleteOne({ id: roomId }),
+                HousingReviews.deleteMany({ housing_room_id: roomId }),
+                RoomDrawStatuses.deleteMany({ housing_room_id: roomId }),
+                RoomPreferences.deleteMany({ housing_room_id: roomId }),
+            ]);
+
+            res.json({
+                message: 'Room deleted',
+                deletedRoomId: roomId,
+                deletedRoomNumber: room.room_number,
+                buildingId: room.housing_building_id,
+            });
         } catch (error) {
             res.status(500).json({ message: 'Server error' });
         }

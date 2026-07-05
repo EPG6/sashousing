@@ -150,18 +150,37 @@ export default function HousingDataAdminPage() {
     const [roomsLoading, setRoomsLoading] = useState(false);
     const [savingBuilding, setSavingBuilding] = useState(false);
     const [savingRoomId, setSavingRoomId] = useState<number | null>(null);
+    const [deletingBuilding, setDeletingBuilding] = useState(false);
+    const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [pendingBuildingId, setPendingBuildingId] = useState<number | null>(
         null
     );
     const [pendingHref, setPendingHref] = useState<string | null>(null);
+    const [pendingDeleteBuildingId, setPendingDeleteBuildingId] = useState<
+        number | null
+    >(null);
+    const [pendingDeleteRoomId, setPendingDeleteRoomId] = useState<number | null>(
+        null
+    );
 
     const selectedBuilding = useMemo(
         () =>
             buildings.find((building) => building.id === selectedBuildingId) ||
             null,
         [buildings, selectedBuildingId]
+    );
+    const pendingDeleteBuilding = useMemo(
+        () =>
+            buildings.find(
+                (building) => building.id === pendingDeleteBuildingId
+            ) || null,
+        [buildings, pendingDeleteBuildingId]
+    );
+    const pendingDeleteRoom = useMemo(
+        () => rooms.find((room) => room.id === pendingDeleteRoomId) || null,
+        [rooms, pendingDeleteRoomId]
     );
 
     const normalizedBuildingSearchQuery = buildingSearchQuery
@@ -444,6 +463,61 @@ export default function HousingDataAdminPage() {
         setEditingBuilding(false);
     };
 
+    const deleteBuilding = async () => {
+        if (pendingDeleteBuildingId === null) {
+            return;
+        }
+
+        setDeletingBuilding(true);
+        setMessage(null);
+        setError(null);
+
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/admin/buildings/${pendingDeleteBuildingId}`,
+                {
+                    method: 'DELETE',
+                    credentials: 'include',
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(
+                        response,
+                        'Failed to delete building'
+                    )
+                );
+            }
+
+            const deletedBuildingName =
+                pendingDeleteBuilding?.name || 'Building';
+            setBuildings((currentBuildings) => {
+                const nextBuildings = currentBuildings.filter(
+                    (building) => building.id !== pendingDeleteBuildingId
+                );
+                setSelectedBuildingId(nextBuildings[0]?.id || null);
+                return nextBuildings;
+            });
+            setRooms([]);
+            setRoomForms({});
+            setEditingBuilding(false);
+            setEditingRoomId(null);
+            setPendingDeleteBuildingId(null);
+            setMessage(`${deletedBuildingName} deleted.`);
+        } catch (error) {
+            console.error('Building delete error:', error);
+            setError(
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not delete building.'
+                )
+            );
+        } finally {
+            setDeletingBuilding(false);
+        }
+    };
+
     const saveRoom = async (roomId: number) => {
         const roomForm = roomForms[roomId];
         if (!roomForm) {
@@ -504,6 +578,76 @@ export default function HousingDataAdminPage() {
         setEditingRoomId(null);
     };
 
+    const deleteRoom = async () => {
+        if (pendingDeleteRoomId === null) {
+            return;
+        }
+
+        setDeletingRoomId(pendingDeleteRoomId);
+        setMessage(null);
+        setError(null);
+
+        try {
+            const response = await fetch(
+                `${backendUrl}/api/campus/housing/admin/rooms/${pendingDeleteRoomId}`,
+                {
+                    method: 'DELETE',
+                    credentials: 'include',
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    await getApiErrorMessage(response, 'Failed to delete room')
+                );
+            }
+
+            const deletedRoomNumber =
+                pendingDeleteRoom?.room_number ||
+                roomForms[pendingDeleteRoomId]?.room_number ||
+                '';
+
+            setRooms((currentRooms) =>
+                currentRooms.filter((room) => room.id !== pendingDeleteRoomId)
+            );
+            setRoomForms((currentForms) => {
+                const nextForms = { ...currentForms };
+                delete nextForms[pendingDeleteRoomId];
+                return nextForms;
+            });
+            setBuildings((currentBuildings) =>
+                currentBuildings.map((building) =>
+                    building.id === selectedBuildingId
+                        ? {
+                              ...building,
+                              roomNumbers: building.roomNumbers.filter(
+                                  (roomNumber) =>
+                                      roomNumber !== deletedRoomNumber
+                              ),
+                          }
+                        : building
+                )
+            );
+            setEditingRoomId(null);
+            setPendingDeleteRoomId(null);
+            setMessage(
+                deletedRoomNumber
+                    ? `Room ${deletedRoomNumber} deleted.`
+                    : 'Room deleted.'
+            );
+        } catch (error) {
+            console.error('Room delete error:', error);
+            setError(
+                getUserSafeMessage(
+                    error instanceof Error ? error.message : null,
+                    'Could not delete room.'
+                )
+            );
+        } finally {
+            setDeletingRoomId(null);
+        }
+    };
+
     const renderRoomActions = (room: Room, isEditingRoom: boolean) =>
         isEditingRoom ? (
             <div className="flex flex-wrap gap-2">
@@ -525,14 +669,24 @@ export default function HousingDataAdminPage() {
                 </button>
             </div>
         ) : (
-            <button
-                type="button"
-                onClick={() => setEditingRoomId(room.id)}
-                disabled={savingRoomId !== null}
-                className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
-            >
-                Edit
-            </button>
+            <div className="flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    onClick={() => setEditingRoomId(room.id)}
+                    disabled={savingRoomId !== null || deletingRoomId !== null}
+                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                >
+                    Edit
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setPendingDeleteRoomId(room.id)}
+                    disabled={savingRoomId !== null || deletingRoomId !== null}
+                    className="rounded-md border border-red-700 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-700 hover:text-white disabled:opacity-60"
+                >
+                    {deletingRoomId === room.id ? 'Deleting...' : 'Delete'}
+                </button>
+            </div>
         );
 
     if (authLoading || loading) {
@@ -614,6 +768,75 @@ export default function HousingDataAdminPage() {
                 }
             >
                 Leaving this page will discard the edits currently on this page.
+            </AppModal>
+            <AppModal
+                isOpen={pendingDeleteBuildingId !== null}
+                title="Delete Building?"
+                onClose={() => {
+                    if (!deletingBuilding) {
+                        setPendingDeleteBuildingId(null);
+                    }
+                }}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingDeleteBuildingId(null)}
+                            disabled={deletingBuilding}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={deleteBuilding}
+                            disabled={deletingBuilding}
+                            className="rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-sas-black disabled:opacity-60"
+                        >
+                            {deletingBuilding ? 'Deleting...' : 'Delete'}
+                        </button>
+                    </>
+                }
+            >
+                This will permanently delete{' '}
+                {pendingDeleteBuilding?.name || 'this building'}, its rooms,
+                reviews, room draw statuses, and room preferences.
+            </AppModal>
+            <AppModal
+                isOpen={pendingDeleteRoomId !== null}
+                title="Delete Room?"
+                onClose={() => {
+                    if (deletingRoomId === null) {
+                        setPendingDeleteRoomId(null);
+                    }
+                }}
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingDeleteRoomId(null)}
+                            disabled={deletingRoomId !== null}
+                            className="rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={deleteRoom}
+                            disabled={deletingRoomId !== null}
+                            className="rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-sas-black disabled:opacity-60"
+                        >
+                            {deletingRoomId !== null ? 'Deleting...' : 'Delete'}
+                        </button>
+                    </>
+                }
+            >
+                This will permanently delete room{' '}
+                {pendingDeleteRoom?.room_number ||
+                    (pendingDeleteRoomId
+                        ? roomForms[pendingDeleteRoomId]?.room_number
+                        : '')}
+                , including its reviews, room draw status, and room preferences.
             </AppModal>
             <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
                 <button
@@ -869,13 +1092,32 @@ export default function HousingDataAdminPage() {
                                         </button>
                                     </>
                                 ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditingBuilding(true)}
-                                        className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white sm:w-auto"
-                                    >
-                                        Edit Building
-                                    </button>
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setEditingBuilding(true)
+                                            }
+                                            disabled={deletingBuilding}
+                                            className="w-full rounded-md border border-sas-green px-5 py-2 font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60 sm:w-auto"
+                                        >
+                                            Edit Building
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setPendingDeleteBuildingId(
+                                                    selectedBuilding.id
+                                                )
+                                            }
+                                            disabled={deletingBuilding}
+                                            className="w-full rounded-md border border-red-700 px-5 py-2 font-medium text-red-700 hover:bg-red-700 hover:text-white disabled:opacity-60 sm:w-auto"
+                                        >
+                                            {deletingBuilding
+                                                ? 'Deleting...'
+                                                : 'Delete Building'}
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </form>
