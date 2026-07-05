@@ -210,16 +210,11 @@ export default function DynamicRooms() {
                         `${backendUrl}/api/campus/housing/${buildingId}/room-draw/statuses`,
                         { credentials: 'include' }
                     ),
+                    fetch(
+                        `${backendUrl}/api/campus/housing/${buildingId}/ratings`,
+                        { credentials: 'include' }
+                    ),
                 ];
-
-                if (!authLoading && user) {
-                    requests.push(
-                        fetch(
-                            `${backendUrl}/api/campus/housing/${buildingId}/ratings`,
-                            { credentials: 'include' }
-                        )
-                    );
-                }
 
                 const [
                     buildingResponse,
@@ -267,38 +262,6 @@ export default function DynamicRooms() {
                                   }
                               >),
                     ]);
-                const preferencesResponse =
-                    !authLoading &&
-                    user &&
-                    roomDrawData.isVisible &&
-                    !roomDrawData.requiresPriority
-                        ? await fetch(
-                              `${backendUrl}/api/campus/housing/room-preferences`,
-                              { credentials: 'include' }
-                          )
-                        : null;
-                const preferenceHoldersResponse =
-                    !authLoading &&
-                    user &&
-                    roomDrawData.isVisible &&
-                    !roomDrawData.requiresPriority
-                        ? await fetch(
-                              `${backendUrl}/api/campus/housing/${buildingId}/room-preferences/holders`,
-                              { credentials: 'include' }
-                          )
-                        : null;
-                const preferencesData =
-                    preferencesResponse?.ok
-                        ? ((await preferencesResponse.json()) as RoomPreference[])
-                        : [];
-                const preferenceHolders =
-                    preferenceHoldersResponse?.ok
-                        ? ((await preferenceHoldersResponse.json()) as Record<
-                              number,
-                              RoomPreferenceHolder[]
-                          >)
-                        : {};
-
                 setBuilding(buildingData);
                 setRoomDrawVisible(roomDrawData.isVisible);
                 setRoomDrawRequiresPriority(
@@ -312,19 +275,6 @@ export default function DynamicRooms() {
                         roomDrawData.priority?.drawDate
                     ),
                 });
-                const nextPreferenceRoomIds = new Set(
-                    preferencesData
-                        .filter((preference) => preference.status !== 'bumped')
-                        .map((preference) => preference.housing_room_id)
-                );
-                setPreferenceRoomIds((currentPreferenceRoomIds) =>
-                    numberSetsEqual(
-                        currentPreferenceRoomIds,
-                        nextPreferenceRoomIds
-                    )
-                        ? currentPreferenceRoomIds
-                        : nextPreferenceRoomIds
-                );
                 setRooms((currentRooms) =>
                     roomsData.map((room: Room) => {
                         const existingRoom = currentRooms.find(
@@ -332,7 +282,6 @@ export default function DynamicRooms() {
                         );
                         const nextRating = ratingsMap[room.id];
                         const nextStatus = roomDrawData.statuses[room.id];
-                        const nextHolders = preferenceHolders[room.id];
 
                         if (
                             existingRoom &&
@@ -341,10 +290,6 @@ export default function DynamicRooms() {
                             roomDrawStatusesEqual(
                                 existingRoom.roomDrawStatus,
                                 nextStatus
-                            ) &&
-                            roomPreferenceHoldersEqual(
-                                existingRoom.roomPreferenceHolders,
-                                nextHolders
                             )
                         ) {
                             return existingRoom;
@@ -355,7 +300,8 @@ export default function DynamicRooms() {
                             averageRating: nextRating?.overallAverage || 0,
                             reviewCount: nextRating?.reviewCount || 0,
                             roomDrawStatus: nextStatus,
-                            roomPreferenceHolders: nextHolders,
+                            roomPreferenceHolders:
+                                existingRoom?.roomPreferenceHolders,
                         };
                     })
                 );
@@ -368,7 +314,7 @@ export default function DynamicRooms() {
         };
 
         fetchRooms();
-    }, [id, user, authLoading]);
+    }, [id]);
 
     useEffect(() => {
         setRoomSearchQuery(initialRoomSearchQuery);
@@ -667,6 +613,22 @@ export default function DynamicRooms() {
             })
         );
     }, [resolvedBuildingId]);
+
+    useEffect(() => {
+        if (authLoading || !user || !roomDrawVisible || roomDrawRequiresPriority) {
+            return;
+        }
+
+        void refreshRoomDrawStatuses();
+        void refreshRoomPreferences();
+    }, [
+        authLoading,
+        refreshRoomDrawStatuses,
+        refreshRoomPreferences,
+        roomDrawRequiresPriority,
+        roomDrawVisible,
+        user,
+    ]);
 
     useEffect(() => {
         if (!user || !roomDrawVisible || roomDrawRequiresPriority || resolvedBuildingId === null) {

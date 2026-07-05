@@ -49,9 +49,32 @@ const BuildingImage = ({ building }: { building: BuildingCard }) => {
     );
 };
 
+const HousingRankingLink = ({ roomDrawVisible }: { roomDrawVisible: boolean }) => {
+    const router = useRouter();
+    const { user } = useAuth();
+
+    useEffect(() => {
+        if (user && roomDrawVisible) {
+            router.prefetch('/campus/housing/preferences');
+        }
+    }, [roomDrawVisible, router, user]);
+
+    if (!user || !roomDrawVisible) {
+        return null;
+    }
+
+    return (
+        <Link
+            href="/campus/housing/preferences"
+            className="mt-4 inline-flex rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
+        >
+            View My Ranking
+        </Link>
+    );
+};
+
 const HousingPage = () => {
     const router = useRouter();
-    const { user, loading: authLoading } = useAuth();
     const [housingData, setHousingData] = useState<CampusGroup[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
@@ -129,12 +152,6 @@ const HousingPage = () => {
         fetchHousingData();
     }, []);
 
-    useEffect(() => {
-        if (user && roomDrawVisible) {
-            router.prefetch('/campus/housing/preferences');
-        }
-    }, [roomDrawVisible, router, user]);
-
     const filteredHousingData = useMemo(() => {
         if (searchTokens.length === 0) {
             return housingData;
@@ -188,7 +205,7 @@ const HousingPage = () => {
             : pathname;
     };
 
-    if (loading || authLoading) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-sas-mist text-sas-black">
                 <SiteHeader />
@@ -238,14 +255,7 @@ const HousingPage = () => {
                         Browse residence halls and room reviews from the student
                         community.
                     </p>
-                    {user && roomDrawVisible && (
-                        <Link
-                            href="/campus/housing/preferences"
-                            className="mt-4 inline-flex rounded-md border border-sas-green px-4 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white"
-                        >
-                            View My Ranking
-                        </Link>
-                    )}
+                    <HousingRankingLink roomDrawVisible={roomDrawVisible} />
                 </div>
 
                 <div className="mb-8 max-w-xl">
