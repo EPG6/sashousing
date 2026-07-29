@@ -3,9 +3,5 @@ export default function Template({
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    return (
-        <div className="flex flex-1 flex-col motion-safe:animate-page-in">
-            {children}
-        </div>
-    );
+    return <div className="flex flex-1 flex-col">{children}</div>;
 }
