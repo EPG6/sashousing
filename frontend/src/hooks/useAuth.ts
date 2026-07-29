@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { User } from '@/types';
 import { backendUrl } from '@/utils/api';
 
@@ -12,17 +12,6 @@ type AuthState = {
 const SESSION_HINT_KEY = 'sas:hasSession';
 const SESSION_HINT_COOKIE = 'sas_has_session=true';
 
-let authState: AuthState = {
-    user: null,
-    loading: true,
-};
-let authPromise: Promise<void> | null = null;
-const subscribers = new Set<(state: AuthState) => void>();
-
-const notifySubscribers = () => {
-    subscribers.forEach((subscriber) => subscriber(authState));
-};
-
 export const hasSessionHint = () => {
     if (typeof window === 'undefined') {
         return false;
@@ -32,6 +21,55 @@ export const hasSessionHint = () => {
         window.localStorage.getItem(SESSION_HINT_KEY) === 'true' ||
         document.cookie.includes(SESSION_HINT_COOKIE)
     );
+};
+
+const SERVER_AUTH_STATE: AuthState = {
+    user: null,
+    loading: true,
+};
+
+let authState: AuthState =
+    typeof window === 'undefined'
+        ? SERVER_AUTH_STATE
+        : {
+              user: null,
+              loading: hasSessionHint(),
+          };
+let authPromise: Promise<void> | null = null;
+const subscribers = new Set<(state: AuthState) => void>();
+
+const notifySubscribers = () => {
+    subscribers.forEach((subscriber) => subscriber(authState));
+};
+
+const subscribeToAuth = (subscriber: () => void) => {
+    const authSubscriber = () => subscriber();
+    subscribers.add(authSubscriber);
+
+    return () => {
+        subscribers.delete(authSubscriber);
+    };
+};
+
+const getAuthSnapshot = () => authState;
+
+const getServerAuthSnapshot = () => SERVER_AUTH_STATE;
+
+const resolveSignedOutWithoutSessionHint = () => {
+    if (hasSessionHint()) {
+        return;
+    }
+
+    if (!authState.loading && authState.user === null) {
+        return;
+    }
+
+    authState = {
+        user: null,
+        loading: false,
+    };
+    authPromise = null;
+    notifySubscribers();
 };
 
 export const setSessionHint = (hasSession: boolean) => {
@@ -86,43 +124,25 @@ const loadAuth = () => {
 };
 
 export function useAuth() {
-    const [state, setState] = useState<AuthState>(authState);
+    const state = useSyncExternalStore(
+        subscribeToAuth,
+        getAuthSnapshot,
+        getServerAuthSnapshot
+    );
 
     useEffect(() => {
-        subscribers.add(setState);
-        setState(authState);
-        void loadAuth();
-
-        return () => {
-            subscribers.delete(setState);
-        };
+        if (hasSessionHint()) {
+            void loadAuth();
+        } else {
+            resolveSignedOutWithoutSessionHint();
+        }
     }, []);
 
     return state;
 }
 
 export function useCurrentUser() {
-    const [user, setUser] = useState<User | null>(authState.user);
-
-    useEffect(() => {
-        const subscriber = (state: AuthState) => {
-            setUser((currentUser) =>
-                currentUser === state.user ? currentUser : state.user
-            );
-        };
-
-        subscribers.add(subscriber);
-        setUser((currentUser) =>
-            currentUser === authState.user ? currentUser : authState.user
-        );
-        if (hasSessionHint()) {
-            void loadAuth();
-        }
-
-        return () => {
-            subscribers.delete(subscriber);
-        };
-    }, []);
+    const { user } = useAuth();
 
     return user;
 }
