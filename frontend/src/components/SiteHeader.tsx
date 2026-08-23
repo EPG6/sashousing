@@ -137,7 +137,7 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps = {}) {
                                 onClick={(event) =>
                                     handleNavigation(event, href)
                                 }
-                                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-smooth ${
+                                className={`min-h-11 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-smooth ${
                                     isActive
                                         ? 'bg-sas-green text-sas-white shadow-sm'
                                         : 'text-sas-black hover:bg-sas-mist hover:text-sas-green'
@@ -213,7 +213,7 @@ const SiteHeaderAuthControls = memo(function SiteHeaderAuthControls({
                     onClick={(event) =>
                         handleNavigation(event, '/admin/housing-data')
                     }
-                    className="rounded-md border border-sas-line px-3 py-2 text-sm font-medium text-sas-black hover:border-sas-green hover:text-sas-green"
+                    className="min-h-11 rounded-md border border-sas-line px-3 py-2 text-sm font-medium text-sas-black hover:border-sas-green hover:text-sas-green"
                 >
                     Dashboard
                 </Link>
@@ -224,7 +224,7 @@ const SiteHeaderAuthControls = memo(function SiteHeaderAuthControls({
                     type="button"
                     onClick={logout}
                     disabled={loggingOut}
-                    className="rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
+                    className="min-h-11 rounded-md border border-sas-green px-3 py-2 text-sm font-medium text-sas-green hover:bg-sas-green hover:text-sas-white disabled:opacity-60"
                 >
                     {loggingOut ? (
                         '...'
